@@ -31,19 +31,22 @@ func connectToProxy(rootCtx context.Context, proxyURL string, headers http.Heade
 	}
 	defer ws.Close()
 
+	result := make(chan error, 2)
+
 	ctx, cancel := context.WithCancel(rootCtx)
 	defer cancel()
 
 	if onConnect != nil {
-		if err := onConnect(ctx); err != nil {
-			return err
-		}
+		go func() {
+			if err := onConnect(ctx); err != nil {
+				result <- err
+			}
+		}()
 	}
 
 	session := NewClientSession(auth, ws)
 	defer session.Close()
 
-	result := make(chan error, 1)
 	go func() {
 		_, err = session.Serve(ctx)
 		result <- err
