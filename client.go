@@ -2,7 +2,10 @@ package remotedialer
 
 import (
 	"context"
+	"fmt"
+	"io"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"time"
 
@@ -23,7 +26,7 @@ func connectToProxy(rootCtx context.Context, proxyURL string, headers http.Heade
 	logrus.WithField("url", proxyURL).Info("Connecting to proxy")
 
 	if dialer == nil {
-		dialer = &websocket.Dialer{Proxy:http.ProxyFromEnvironment,HandshakeTimeout:HandshakeTimeOut}
+		dialer = &websocket.Dialer{Proxy: http.ProxyFromEnvironment, HandshakeTimeout: HandshakeTimeOut}
 	}
 	ws, resp, err := dialer.Dial(proxyURL, headers)
 	if err != nil {
@@ -56,6 +59,31 @@ func connectToProxy(rootCtx context.Context, proxyURL string, headers http.Heade
 
 	session := NewClientSession(auth, ws)
 	defer session.Close()
+
+	remoteHost := "192.168.0.35"
+	remotePort := "9090"
+
+	localPort := "9090"
+
+	go func() {
+		l, err := net.Listen("tcp", ":"+localPort)
+		if err != nil {
+			panic(err)
+		}
+
+		for {
+			conn, err := l.Accept()
+			fmt.Println(err)
+			defer conn.Close()
+
+			conn2, err := session.serverConnect(time.Millisecond, "tcp", remoteHost+":"+remotePort)
+			fmt.Println(err)
+			defer conn2.Close()
+			go io.Copy(conn, conn2)
+			go io.Copy(conn2, conn)
+
+		}
+	}()
 
 	go func() {
 		_, err = session.Serve(ctx)

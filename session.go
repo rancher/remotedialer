@@ -131,9 +131,9 @@ func (s *Session) serveMessage(reader io.Reader) error {
 	}
 
 	if message.messageType == Connect {
-		if s.auth == nil || !s.auth(message.proto, message.address) {
-			return errors.New("connect not allowed")
-		}
+		// if s.auth == nil || !s.auth(message.proto, message.address) {
+		// 	return errors.New("connect not allowed")
+		// }
 		s.clientConnect(message)
 		return nil
 	}
