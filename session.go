@@ -273,6 +273,13 @@ func (s *Session) serverConnectContext(ctx context.Context, proto, address strin
 
 	select {
 	case <-ctx.Done():
+		// We don't want to orphan an open connection so we wait for the result and immediately close it
+		go func() {
+			r := <-result
+			if r.err == nil {
+				r.conn.Close()
+			}
+		}()
 		return nil, ctx.Err()
 	case r := <-result:
 		return r.conn, r.err
