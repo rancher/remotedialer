@@ -255,6 +255,10 @@ type connResult struct {
 	err  error
 }
 
+func (s *Session) Dial(ctx context.Context, proto, address string) (net.Conn, error) {
+	return s.serverConnectContext(ctx, proto, address)
+}
+
 func (s *Session) serverConnectContext(ctx context.Context, proto, address string) (net.Conn, error) {
 	deadline, ok := ctx.Deadline()
 	if ok {
