@@ -55,8 +55,26 @@ func (r *readBuffer) Read(b []byte) (int, error) {
 	defer r.cond.L.Unlock()
 
 	for {
+		var (
+			n int
+			err error
+		)
+
+		if r.buf.Len() > 0 {
+			n, err = r.buf.Read(b)
+			r.cond.Broadcast()
+			if err != io.EOF {
+				return n, err
+			}
+			// buffer remains to be read
+			if r.err == io.EOF && r.buf.Len() > 0 {
+				return n, nil
+			}
+			return n, r.err
+		}
+
 		if r.err != nil {
-			return 0, r.err
+			return n, r.err
 		}
 
 		now := time.Now()
@@ -64,15 +82,6 @@ func (r *readBuffer) Read(b []byte) (int, error) {
 			if now.After(r.deadline) {
 				return 0, errors.New("deadline exceeded")
 			}
-		}
-
-		if r.buf.Len() > 0 {
-			n, err := r.buf.Read(b)
-			r.cond.Broadcast()
-			if err != io.EOF {
-				return n, err
-			}
-			return n, nil
 		}
 
 		var t *time.Timer
