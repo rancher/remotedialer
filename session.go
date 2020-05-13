@@ -80,7 +80,7 @@ func (s *Session) startPings(rootCtx context.Context) {
 				return
 			case <-t.C:
 				s.conn.Lock()
-				if err := s.conn.conn.WriteControl(websocket.PingMessage, []byte(""), time.Now().Add(time.Second)); err != nil {
+				if err := s.conn.conn.WriteControl(websocket.PingMessage, []byte(""), time.Now().Add(PingWaitDuration)); err != nil {
 					logrus.WithError(err).Error("Error writing ping")
 				}
 				logrus.Debug("Wrote ping")
