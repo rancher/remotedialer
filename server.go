@@ -19,8 +19,8 @@ type Authorizer func(req *http.Request) (clientKey string, authed bool, err erro
 type ErrorWriter func(rw http.ResponseWriter, req *http.Request, code int, err error)
 
 func DefaultErrorWriter(rw http.ResponseWriter, req *http.Request, code int, err error) {
-	rw.Write([]byte(err.Error()))
 	rw.WriteHeader(code)
+	rw.Write([]byte(err.Error()))
 }
 
 type Server struct {
