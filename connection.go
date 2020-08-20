@@ -67,16 +67,11 @@ func (c *connection) Read(b []byte) (int, error) {
 
 func (c *connection) Write(b []byte) (int, error) {
 	if c.err != nil {
-		return 0, c.err
+		return 0, io.ErrClosedPipe
 	}
-
 	msg := newMessage(c.connID, b)
 	metrics.AddSMTotalTransmitBytesOnWS(c.session.clientKey, float64(len(msg.Bytes())))
-	n, err := c.session.writeMessage(c.writeDeadline, msg)
-	if err != nil {
-		return 0, err
-	}
-	return n, c.err
+	return c.session.writeMessage(c.writeDeadline, msg)
 }
 
 func (c *connection) writeErr(err error) {
