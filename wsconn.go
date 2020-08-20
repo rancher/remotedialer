@@ -21,15 +21,10 @@ func newWSConn(conn *websocket.Conn) *wsConn {
 	return w
 }
 
-func (w *wsConn) WriteMessage(messageType int, deadline time.Time, data []byte) error {
+func (w *wsConn) WriteMessage(messageType int, data []byte) error {
 	w.Lock()
 	defer w.Unlock()
-	if err := w.conn.SetWriteDeadline(deadline); err != nil {
-		return err
-	}
-	if err := w.conn.SetReadDeadline(deadline); err != nil {
-		return err
-	}
+	w.conn.SetWriteDeadline(time.Now().Add(PingWaitDuration))
 	return w.conn.WriteMessage(messageType, data)
 }
 
@@ -41,7 +36,7 @@ func (w *wsConn) setupDeadline() {
 	w.conn.SetReadDeadline(time.Now().Add(PingWaitDuration))
 	w.conn.SetPingHandler(func(string) error {
 		w.Lock()
-		w.conn.WriteControl(websocket.PongMessage, []byte(""), time.Now().Add(PingWaitDuration))
+		w.conn.WriteControl(websocket.PongMessage, []byte(""), time.Now().Add(time.Second))
 		w.Unlock()
 		return w.conn.SetReadDeadline(time.Now().Add(PingWaitDuration))
 	})

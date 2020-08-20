@@ -65,10 +65,10 @@ func getClient(server *remotedialer.Server, clientKey, timeout string) *http.Cli
 		return client
 	}
 
-	dialer := server.Dialer(clientKey)
+	dialer := server.Dialer(clientKey, 15*time.Second)
 	client = &http.Client{
 		Transport: &http.Transport{
-			DialContext: dialer,
+			Dial: dialer,
 		},
 	}
 	if timeout != "" {

@@ -101,17 +101,16 @@ outer:
 		metrics.IncSMTotalPeerConnected(p.id)
 
 		session := NewClientSession(func(string, string) bool { return true }, ws)
-		session.dialer = func(ctx context.Context, network, address string) (net.Conn, error) {
+		session.dialer = func(network, address string) (net.Conn, error) {
 			parts := strings.SplitN(network, "::", 2)
 			if len(parts) != 2 {
 				return nil, fmt.Errorf("invalid clientKey/proto: %s", network)
 			}
-			d := s.Dialer(parts[0])
-			return d(ctx, parts[1], address)
+			return s.Dial(parts[0], 15*time.Second, parts[1], address)
 		}
 
 		s.sessions.addListener(session)
-		_, err = session.Serve(ctx)
+		_, err = session.Serve(context.Background())
 		s.sessions.removeListener(session)
 		session.Close()
 
