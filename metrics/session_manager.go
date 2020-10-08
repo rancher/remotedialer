@@ -98,20 +98,26 @@ var (
 	)
 )
 
+// Register registers a series of session
+// metrics for Prometheus.
+func Register() {
+	// Session metrics
+	prometheus.MustRegister(TotalAddWS)
+	prometheus.MustRegister(TotalRemoveWS)
+	prometheus.MustRegister(TotalAddConnectionsForWS)
+	prometheus.MustRegister(TotalRemoveConnectionsForWS)
+	prometheus.MustRegister(TotalTransmitBytesOnWS)
+	prometheus.MustRegister(TotalTransmitErrorBytesOnWS)
+	prometheus.MustRegister(TotalReceiveBytesOnWS)
+	prometheus.MustRegister(TotalAddPeerAttempt)
+	prometheus.MustRegister(TotalPeerConnected)
+	prometheus.MustRegister(TotalPeerDisConnected)
+}
+
 func init() {
 	if os.Getenv(metricsEnv) == "true" {
 		prometheusMetrics = true
-		// Session metrics
-		prometheus.MustRegister(TotalAddWS)
-		prometheus.MustRegister(TotalRemoveWS)
-		prometheus.MustRegister(TotalAddConnectionsForWS)
-		prometheus.MustRegister(TotalRemoveConnectionsForWS)
-		prometheus.MustRegister(TotalTransmitBytesOnWS)
-		prometheus.MustRegister(TotalTransmitErrorBytesOnWS)
-		prometheus.MustRegister(TotalReceiveBytesOnWS)
-		prometheus.MustRegister(TotalAddPeerAttempt)
-		prometheus.MustRegister(TotalPeerConnected)
-		prometheus.MustRegister(TotalPeerDisConnected)
+		Register()
 	}
 }
 
