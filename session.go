@@ -43,12 +43,17 @@ func init() {
 }
 
 func NewClientSession(auth ConnectAuthorizer, conn *websocket.Conn) *Session {
+	return NewClientSessionWithDialer(auth, conn, nil)
+}
+
+func NewClientSessionWithDialer(auth ConnectAuthorizer, conn *websocket.Conn, dialer Dialer) *Session {
 	return &Session{
 		clientKey: "client",
 		conn:      newWSConn(conn),
 		conns:     map[int64]*connection{},
 		auth:      auth,
 		client:    true,
+		dialer:    dialer,
 	}
 }
 
