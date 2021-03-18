@@ -72,7 +72,6 @@ func (s *Server) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	session.auth = s.ClientConnectAuthorizer
 	defer s.sessions.remove(session)
 
-	// Don't need to associate req.Context() to the Session, it will cancel otherwise
 	code, err := session.Serve(req.Context())
 	if err != nil {
 		// Hijacked so we can't write to the client
