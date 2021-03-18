@@ -56,7 +56,7 @@ func (r *readBuffer) Read(b []byte) (int, error) {
 
 	for {
 		var (
-			n int
+			n   int
 			err error
 		)
 
