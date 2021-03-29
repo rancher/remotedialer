@@ -75,7 +75,7 @@ func (s *Server) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	code, err := session.Serve(req.Context())
 	if err != nil {
 		// Hijacked so we can't write to the client
-		logrus.Infof("error in remotedialer server [%d]: %v", code, err)
+		logrus.Errorf("error in remotedialer server [%d]: %v", code, err)
 	}
 }
 
