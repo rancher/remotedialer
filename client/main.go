@@ -3,7 +3,9 @@ package main
 import (
 	"context"
 	"flag"
+	"math/rand"
 	"net/http"
+	"time"
 
 	"github.com/rancher/remotedialer"
 	"github.com/sirupsen/logrus"
@@ -28,6 +30,9 @@ func main() {
 	headers := http.Header{
 		"X-Tunnel-ID": []string{id},
 	}
-
-	remotedialer.ClientConnect(context.Background(), addr, headers, nil, func(string, string) bool { return true }, nil)
+	for {
+		remotedialer.ClientConnect(context.Background(), addr, headers, nil, func(string, string) bool { return true }, nil)
+		// retry connect after sleep a random time
+		time.Sleep(time.Duration(rand.Int()%10) * time.Second)
+	}
 }

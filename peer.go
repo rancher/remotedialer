@@ -17,6 +17,7 @@ import (
 var (
 	Token = "X-API-Tunnel-Token"
 	ID    = "X-API-Tunnel-ID"
+	Proxy = "X-API-Tunnel-Proxy"
 )
 
 func (s *Server) AddPeer(url, id, token string) {

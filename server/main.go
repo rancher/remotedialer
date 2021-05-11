@@ -40,8 +40,13 @@ func Client(server *remotedialer.Server, rw http.ResponseWriter, req *http.Reque
 
 	id := atomic.AddInt64(&counter, 1)
 	logrus.Infof("[%03d] REQ t=%s %s", id, timeout, url)
-
-	resp, err := client.Get(url)
+	proxyReq, err := http.NewRequest(req.Method, url, req.Body)
+	if err != nil {
+		logrus.Errorf("[%03d] NEW REQ %s: %v", id, url, err)
+		remotedialer.DefaultErrorWriter(rw, req, 500, err)
+		return
+	}
+	resp, err := client.Do(proxyReq)
 	if err != nil {
 		logrus.Errorf("[%03d] REQ ERR t=%s %s: %v", id, timeout, url, err)
 		remotedialer.DefaultErrorWriter(rw, req, 500, err)
@@ -103,6 +108,7 @@ func main() {
 	}
 
 	handler := remotedialer.New(authorizer, remotedialer.DefaultErrorWriter)
+	handler.ClientConnectAuthorizer = func(string, string) bool { return true }
 	handler.PeerToken = peerToken
 	handler.PeerID = peerID
 

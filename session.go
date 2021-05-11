@@ -42,6 +42,15 @@ func init() {
 	}
 }
 
+func NewProxySession(auth ConnectAuthorizer, conn *websocket.Conn) *Session {
+	return &Session{
+		clientKey: "proxy",
+		conn:      newWSConn(conn),
+		conns:     map[int64]*connection{},
+		auth:      auth,
+	}
+}
+
 func NewClientSession(auth ConnectAuthorizer, conn *websocket.Conn) *Session {
 	return NewClientSessionWithDialer(auth, conn, nil)
 }
