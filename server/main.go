@@ -105,6 +105,18 @@ func main() {
 	handler := remotedialer.New(authorizer, remotedialer.DefaultErrorWriter)
 	handler.PeerToken = peerToken
 	handler.PeerID = peerID
+	handler.ClientConnectAuthorizer = func(proto, address string) bool {
+		if strings.HasSuffix(proto, "::tcp") {
+			return true
+		}
+		if strings.HasSuffix(proto, "::unix") {
+			return address == "/var/run/docker.sock"
+		}
+		if strings.HasSuffix(proto, "::npipe") {
+			return address == "//./pipe/docker_engine"
+		}
+		return false
+	}
 
 	for _, peer := range strings.Split(peers, ",") {
 		parts := strings.SplitN(strings.TrimSpace(peer), ":", 3)
