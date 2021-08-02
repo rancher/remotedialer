@@ -49,7 +49,7 @@ var (
 		prometheus.CounterOpts{
 			Subsystem: "session_server",
 			Name:      "total_transmit_bytes",
-			Help:      "Total bytes transmited",
+			Help:      "Total bytes transmitted",
 		},
 		[]string{"clientkey"},
 	)
@@ -58,7 +58,7 @@ var (
 		prometheus.CounterOpts{
 			Subsystem: "session_server",
 			Name:      "total_transmit_error_bytes",
-			Help:      "Total error bytes transmited",
+			Help:      "Total error bytes transmitted",
 		},
 		[]string{"clientkey"},
 	)
@@ -67,7 +67,7 @@ var (
 		prometheus.CounterOpts{
 			Subsystem: "session_server",
 			Name:      "total_receive_bytes",
-			Help:      "Total bytes recieved",
+			Help:      "Total bytes received",
 		},
 		[]string{"clientkey"},
 	)
