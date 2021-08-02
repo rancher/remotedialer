@@ -101,6 +101,9 @@ var (
 // Register registers a series of session
 // metrics for Prometheus.
 func Register() {
+
+	prometheusMetrics = true
+
 	// Session metrics
 	prometheus.MustRegister(TotalAddWS)
 	prometheus.MustRegister(TotalRemoveWS)
@@ -116,7 +119,6 @@ func Register() {
 
 func init() {
 	if os.Getenv(metricsEnv) == "true" {
-		prometheusMetrics = true
 		Register()
 	}
 }
