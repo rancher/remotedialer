@@ -29,5 +29,8 @@ func main() {
 		"X-Tunnel-ID": []string{id},
 	}
 
-	remotedialer.ClientConnect(context.Background(), addr, headers, nil, func(string, string) bool { return true }, nil)
+	remotedialer.ClientConnect(context.Background(), addr, headers, nil, func(string, string) bool { return true }, nil, func(c context.Context) error {
+		logrus.Debug("On error call back")
+		return nil
+	})
 }

@@ -15,8 +15,13 @@ type ConnectAuthorizer func(proto, address string) bool
 
 // ClientConnect connect to WS and wait 5 seconds when error
 func ClientConnect(ctx context.Context, wsURL string, headers http.Header, dialer *websocket.Dialer,
-	auth ConnectAuthorizer, onConnect func(context.Context, *Session) error) error {
+	auth ConnectAuthorizer, onConnect func(context.Context, *Session) error, onError func(context.Context) error) error {
 	if err := ConnectToProxy(ctx, wsURL, headers, auth, dialer, onConnect); err != nil {
+		if onError != nil {
+			if err := onError(ctx); err != nil {
+				logrus.WithError(err).Error("Error excuting on error call back")
+			}
+		}
 		logrus.WithError(err).Error("Remotedialer proxy error")
 		time.Sleep(time.Duration(5) * time.Second)
 		return err
