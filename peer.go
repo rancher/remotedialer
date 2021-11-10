@@ -120,6 +120,7 @@ outer:
 		}
 
 		ws.Close()
+		metrics.IncSMTotalPeerDisConnected(p.id)
 		time.Sleep(5 * time.Second)
 	}
 }
