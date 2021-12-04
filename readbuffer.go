@@ -6,6 +6,8 @@ import (
 	"io"
 	"sync"
 	"time"
+
+	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -31,23 +33,21 @@ func (r *readBuffer) Offer(reader io.Reader) error {
 	r.cond.L.Lock()
 	defer r.cond.L.Unlock()
 
-	for {
-		if r.err != nil {
-			return r.err
-		}
-
-		if n, err := io.Copy(&r.buf, reader); err != nil {
-			return err
-		} else if n > 0 {
-			r.cond.Broadcast()
-		}
-
-		if r.buf.Len() < MaxBuffer {
-			return nil
-		}
-
-		r.cond.Wait()
+	if r.err != nil {
+		return r.err
 	}
+
+	if n, err := io.Copy(&r.buf, reader); err != nil {
+		return err
+	} else if n > 0 {
+		r.cond.Broadcast()
+	}
+
+	if r.buf.Len() >= MaxBuffer {
+		logrus.Errorf("remotedialer buffer exceeded, length: %d", r.buf.Len())
+	}
+
+	return nil
 }
 
 func (r *readBuffer) Read(b []byte) (int, error) {
