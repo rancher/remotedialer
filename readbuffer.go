@@ -3,6 +3,7 @@ package remotedialer
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"io"
 	"sync"
 	"time"
@@ -15,11 +16,12 @@ const (
 )
 
 type readBuffer struct {
-	cond         sync.Cond
-	deadline     time.Time
-	buf          bytes.Buffer
-	err          error
-	backPressure *backPressure
+	readCount, offerCount int64
+	cond                  sync.Cond
+	deadline              time.Time
+	buf                   bytes.Buffer
+	err                   error
+	backPressure          *backPressure
 }
 
 func newReadBuffer(backPressure *backPressure) *readBuffer {
@@ -31,6 +33,12 @@ func newReadBuffer(backPressure *backPressure) *readBuffer {
 	}
 }
 
+func (r *readBuffer) Status() string {
+	r.cond.L.Lock()
+	defer r.cond.L.Unlock()
+	return fmt.Sprintf("%d/%d", r.readCount, r.offerCount)
+}
+
 func (r *readBuffer) Offer(reader io.Reader) error {
 	r.cond.L.Lock()
 	defer r.cond.L.Unlock()
@@ -40,15 +48,15 @@ func (r *readBuffer) Offer(reader io.Reader) error {
 	}
 
 	if n, err := io.Copy(&r.buf, reader); err != nil {
+		r.offerCount += n
 		return err
 	} else if n > 0 {
+		r.offerCount += n
 		r.cond.Broadcast()
 	}
 
 	if r.buf.Len() > MaxBuffer {
-		if err := r.backPressure.Pause(); err != nil {
-			return err
-		}
+		r.backPressure.Pause()
 	}
 
 	if r.buf.Len() > MaxBuffer*2 {
@@ -63,31 +71,24 @@ func (r *readBuffer) Read(b []byte) (int, error) {
 	defer r.cond.L.Unlock()
 
 	for {
-		var (
-			n   int
-			err error
-		)
-
 		if r.buf.Len() > 0 {
-			n, err = r.buf.Read(b)
+			n, err := r.buf.Read(b)
+			if err != nil {
+				// The definition of bytes.Buffer is that this will always return nil because
+				// we first checked that bytes.Buffer.Len() > 0. We assume that fact so just assert
+				// that here.
+				panic("bytes.Buffer returned err=\"" + err.Error() + "\" when buffer length was > 0")
+			}
+			r.readCount += int64(n)
 			r.cond.Broadcast()
-			if err != io.EOF {
-				if r.buf.Len() < MaxBuffer/8 {
-					if err := r.backPressure.Resume(); err != nil {
-						return n, err
-					}
-				}
-				return n, err
+			if r.buf.Len() < MaxBuffer/8 {
+				r.backPressure.Resume()
 			}
-			// buffer remains to be read
-			if r.err == io.EOF && r.buf.Len() > 0 {
-				return n, nil
-			}
-			return n, r.err
+			return n, nil
 		}
 
 		if r.err != nil {
-			return n, r.err
+			return 0, r.err
 		}
 
 		now := time.Now()
