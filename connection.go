@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/rancher/remotedialer/metrics"
+	"github.com/sirupsen/logrus"
 )
 
 type connection struct {
@@ -53,6 +54,11 @@ func (c *connection) doTunnelClose(err error) {
 }
 
 func (c *connection) OnData(m *message) error {
+	if PrintTunnelData {
+		defer func() {
+			logrus.Debugf("ONDATA  [%d] %s", c.connID, c.buffer.Status())
+		}()
+	}
 	return c.buffer.Offer(m.body)
 }
 
@@ -64,6 +70,9 @@ func (c *connection) Close() error {
 func (c *connection) Read(b []byte) (int, error) {
 	n, err := c.buffer.Read(b)
 	metrics.AddSMTotalReceiveBytesOnWS(c.session.clientKey, float64(n))
+	if PrintTunnelData {
+		logrus.Debugf("READ    [%d] %s %d %v", c.connID, c.buffer.Status(), n, err)
+	}
 	return n, err
 }
 
@@ -85,20 +94,14 @@ func (c *connection) OnResume() {
 	c.backPressure.OnResume()
 }
 
-func (c *connection) Pause() (int, error) {
-	if c.err != nil {
-		return 0, io.ErrClosedPipe
-	}
+func (c *connection) Pause() {
 	msg := newPause(c.connID)
-	return c.session.writeMessage(c.writeDeadline, msg)
+	_, _ = c.session.writeMessage(c.writeDeadline, msg)
 }
 
-func (c *connection) Resume() (int, error) {
-	if c.err != nil {
-		return 0, io.ErrClosedPipe
-	}
+func (c *connection) Resume() {
 	msg := newResume(c.connID)
-	return c.session.writeMessage(c.writeDeadline, msg)
+	_, _ = c.session.writeMessage(c.writeDeadline, msg)
 }
 
 func (c *connection) writeErr(err error) {
