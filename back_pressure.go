@@ -8,6 +8,7 @@ type backPressure struct {
 	cond   sync.Cond
 	c      *connection
 	paused bool
+	closed bool
 }
 
 func newBackPressure(c *connection) *backPressure {
@@ -25,6 +26,14 @@ func (b *backPressure) OnPause() {
 	defer b.cond.L.Unlock()
 
 	b.paused = true
+	b.cond.Broadcast()
+}
+
+func (b *backPressure) Close() {
+	b.cond.L.Lock()
+	defer b.cond.L.Unlock()
+
+	b.closed = true
 	b.cond.Broadcast()
 }
 
@@ -60,7 +69,7 @@ func (b *backPressure) Wait() {
 	b.cond.L.Lock()
 	defer b.cond.L.Unlock()
 
-	for b.paused {
+	for !b.closed && b.paused {
 		b.cond.Wait()
 	}
 }
