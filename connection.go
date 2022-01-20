@@ -64,6 +64,7 @@ func (c *connection) OnData(m *message) error {
 
 func (c *connection) Close() error {
 	c.session.closeConnection(c.connID, io.EOF)
+	c.backPressure.Close()
 	return nil
 }
 
