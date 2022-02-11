@@ -29,7 +29,7 @@ func newConnection(connID int64, session *Session, proto, address string) *conne
 		session: session,
 	}
 	c.backPressure = newBackPressure(c)
-	c.buffer = newReadBuffer(c.backPressure)
+	c.buffer = newReadBuffer(connID, c.backPressure)
 	metrics.IncSMTotalAddConnectionsForWS(session.clientKey, proto, address)
 	return c
 }
