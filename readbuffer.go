@@ -88,6 +88,11 @@ func (r *readBuffer) Read(b []byte) (int, error) {
 			return n, nil
 		}
 
+		if r.buf.Cap() > MaxBuffer/8 {
+			logrus.Errorf("resetting remotedialer buffer id=%d to zero, old cap %d", r.id, r.buf.Cap())
+			r.buf = bytes.Buffer{}
+		}
+
 		if r.err != nil {
 			return 0, r.err
 		}
