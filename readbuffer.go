@@ -61,7 +61,7 @@ func (r *readBuffer) Offer(reader io.Reader) error {
 	}
 
 	if r.buf.Len() > MaxBuffer*2 {
-		logrus.Errorf("remotedialer buffer id=%d exceeded, length: %d", r.id, r.buf.Len())
+		logrus.Errorf("remotedialer buffer exceeded id=%d, length: %d", r.id, r.buf.Len())
 	}
 
 	return nil
@@ -89,7 +89,7 @@ func (r *readBuffer) Read(b []byte) (int, error) {
 		}
 
 		if r.buf.Cap() > MaxBuffer/8 {
-			logrus.Errorf("resetting remotedialer buffer id=%d to zero, old cap %d", r.id, r.buf.Cap())
+			logrus.Debugf("resetting remotedialer buffer id=%d to zero, old cap %d", r.id, r.buf.Cap())
 			r.buf = bytes.Buffer{}
 		}
 
