@@ -16,16 +16,17 @@ const (
 )
 
 type readBuffer struct {
-	readCount, offerCount int64
-	cond                  sync.Cond
-	deadline              time.Time
-	buf                   bytes.Buffer
-	err                   error
-	backPressure          *backPressure
+	id, readCount, offerCount int64
+	cond                      sync.Cond
+	deadline                  time.Time
+	buf                       bytes.Buffer
+	err                       error
+	backPressure              *backPressure
 }
 
-func newReadBuffer(backPressure *backPressure) *readBuffer {
+func newReadBuffer(id int64, backPressure *backPressure) *readBuffer {
 	return &readBuffer{
+		id:           id,
 		backPressure: backPressure,
 		cond: sync.Cond{
 			L: &sync.Mutex{},
@@ -60,7 +61,7 @@ func (r *readBuffer) Offer(reader io.Reader) error {
 	}
 
 	if r.buf.Len() > MaxBuffer*2 {
-		logrus.Errorf("remotedialer buffer exceeded, length: %d", r.buf.Len())
+		logrus.Errorf("remotedialer buffer exceeded id=%d, length: %d", r.id, r.buf.Len())
 	}
 
 	return nil
@@ -85,6 +86,11 @@ func (r *readBuffer) Read(b []byte) (int, error) {
 				r.backPressure.Resume()
 			}
 			return n, nil
+		}
+
+		if r.buf.Cap() > MaxBuffer/8 {
+			logrus.Debugf("resetting remotedialer buffer id=%d to zero, old cap %d", r.id, r.buf.Cap())
+			r.buf = bytes.Buffer{}
 		}
 
 		if r.err != nil {
