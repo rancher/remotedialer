@@ -1,6 +1,7 @@
 package remotedialer
 
 import (
+	"context"
 	"io"
 	"net"
 	"time"
@@ -81,7 +82,21 @@ func (c *connection) Write(b []byte) (int, error) {
 	if c.err != nil {
 		return 0, io.ErrClosedPipe
 	}
-	c.backPressure.Wait()
+	ctx, cancel := context.WithCancel(context.Background())
+	if !c.writeDeadline.IsZero() {
+		ctx, cancel = context.WithDeadline(ctx, c.writeDeadline)
+		go func(ctx context.Context) {
+			select {
+			case <-ctx.Done():
+				if ctx.Err() == context.DeadlineExceeded {
+					c.Close()
+				}
+				return
+			}
+		}(ctx)
+	}
+
+	c.backPressure.Wait(cancel)
 	msg := newMessage(c.connID, b)
 	metrics.AddSMTotalTransmitBytesOnWS(c.session.clientKey, float64(len(msg.Bytes())))
 	return c.session.writeMessage(c.writeDeadline, msg)
