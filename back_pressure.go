@@ -1,6 +1,7 @@
 package remotedialer
 
 import (
+	"context"
 	"sync"
 )
 
@@ -65,11 +66,12 @@ func (b *backPressure) Resume() {
 	b.paused = false
 }
 
-func (b *backPressure) Wait() {
+func (b *backPressure) Wait(cancel context.CancelFunc) {
 	b.cond.L.Lock()
 	defer b.cond.L.Unlock()
 
 	for !b.closed && b.paused {
 		b.cond.Wait()
+		cancel()
 	}
 }
