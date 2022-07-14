@@ -50,6 +50,15 @@ func Client(server *remotedialer.Server, rw http.ResponseWriter, req *http.Reque
 	defer resp.Body.Close()
 
 	logrus.Infof("[%03d] REQ OK t=%s %s", id, timeout, url)
+	for k, v := range resp.Header {
+		for _, h := range v {
+			if rw.Header().Get(k) == "" {
+				rw.Header().Set(k, h)
+			} else {
+				rw.Header().Add(k, h)
+			}
+		}
+	}
 	rw.WriteHeader(resp.StatusCode)
 	io.Copy(rw, resp.Body)
 	logrus.Infof("[%03d] REQ DONE t=%s %s", id, timeout, url)
