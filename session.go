@@ -57,7 +57,7 @@ func NewClientSessionWithDialer(auth ConnectAuthorizer, conn *websocket.Conn, di
 	}
 }
 
-func newSession(sessionKey int64, clientKey string, conn *websocket.Conn) *Session {
+func newSession(sessionKey int64, clientKey string, conn *websocket.Conn, dialer Dialer) *Session {
 	return &Session{
 		nextConnID:       1,
 		clientKey:        clientKey,
@@ -65,6 +65,7 @@ func newSession(sessionKey int64, clientKey string, conn *websocket.Conn) *Sessi
 		conn:             newWSConn(conn),
 		conns:            map[int64]*connection{},
 		remoteClientKeys: map[string]map[int]bool{},
+		dialer:           dialer,
 	}
 }
 

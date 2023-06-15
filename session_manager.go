@@ -91,7 +91,28 @@ func (sm *sessionManager) getDialer(clientKey string) (Dialer, error) {
 
 func (sm *sessionManager) add(clientKey string, conn *websocket.Conn, peer bool) *Session {
 	sessionKey := rand.Int63()
-	session := newSession(sessionKey, clientKey, conn)
+	session := newSession(sessionKey, clientKey, conn, func(ctx context.Context, network, address string) (net.Conn, error) {
+		// check if address is a clientKey
+		switch network {
+		case "tcp", "tcp4", "tcp6", "udp", "udp4", "udp6":
+			if host, port, err := net.SplitHostPort(address); err == nil {
+				dialer, _ := sm.getDialer(host)
+				if dialer != nil {
+					address = "127.0.0.1"
+					if port != "" {
+						address = net.JoinHostPort(address, port)
+					}
+
+					fmt.Println("ROUTE TO CLIENT " + host)
+					return dialer(ctx, network, address)
+				}
+			}
+		}
+
+		// direct
+		d := &net.Dialer{}
+		return d.DialContext(ctx, network, address)
+	})
 
 	sm.Lock()
 	defer sm.Unlock()
