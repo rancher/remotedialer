@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
-	"github.com/rancher/remotedialer/metrics"
+	"github.com/loft-sh/remotedialer/metrics"
 	"github.com/sirupsen/logrus"
 )
 
@@ -100,7 +100,13 @@ outer:
 		}
 		metrics.IncSMTotalPeerConnected(p.id)
 
-		session := NewClientSession(func(string, string) bool { return true }, ws)
+		session, err := NewClientSession(func(string, string) bool { return true }, ws)
+		if err != nil {
+			logrus.Errorf("Failed to connect to peer %s: %v", p.url, err)
+			time.Sleep(5 * time.Second)
+			continue
+		}
+
 		session.dialer = func(ctx context.Context, network, address string) (net.Conn, error) {
 			parts := strings.SplitN(network, "::", 2)
 			if len(parts) != 2 {

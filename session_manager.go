@@ -8,12 +8,12 @@ import (
 	"sync"
 
 	"github.com/gorilla/websocket"
-	"github.com/rancher/remotedialer/metrics"
+	"github.com/loft-sh/remotedialer/metrics"
 )
 
 type sessionListener interface {
-	sessionAdded(clientKey string, sessionKey int64)
-	sessionRemoved(clientKey string, sessionKey int64)
+	sessionAdded(clientKey string, sessionKey int64) error
+	sessionRemoved(clientKey string, sessionKey int64) error
 }
 
 type sessionManager struct {
@@ -89,9 +89,12 @@ func (sm *sessionManager) getDialer(clientKey string) (Dialer, error) {
 	return nil, fmt.Errorf("failed to find Session for client %s", clientKey)
 }
 
-func (sm *sessionManager) add(clientKey string, conn *websocket.Conn, peer bool) *Session {
+func (sm *sessionManager) add(clientKey string, conn *websocket.Conn, peer bool) (*Session, error) {
 	sessionKey := rand.Int63()
-	session := newSession(sessionKey, clientKey, conn)
+	session, err := newSession(sessionKey, clientKey, conn)
+	if err != nil {
+		return nil, err
+	}
 
 	sm.Lock()
 	defer sm.Unlock()
@@ -107,7 +110,7 @@ func (sm *sessionManager) add(clientKey string, conn *websocket.Conn, peer bool)
 		l.sessionAdded(clientKey, session.sessionKey)
 	}
 
-	return session
+	return session, nil
 }
 
 func (sm *sessionManager) remove(s *Session) {

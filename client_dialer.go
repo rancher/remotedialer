@@ -8,9 +8,8 @@ import (
 	"time"
 )
 
-func clientDial(ctx context.Context, dialer Dialer, conn *connection, message *message) {
-	defer conn.Close()
-
+func clientDial(ctx context.Context, dialer Dialer, message *message) {
+	defer message.conn.Close()
 	var (
 		netConn net.Conn
 		err     error
@@ -24,17 +23,15 @@ func clientDial(ctx context.Context, dialer Dialer, conn *connection, message *m
 		netConn, err = dialer(ctx, message.proto, message.address)
 	}
 	cancel()
-
 	if err != nil {
-		conn.tunnelClose(err)
 		return
 	}
-	defer netConn.Close()
 
-	pipe(conn, netConn)
+	defer netConn.Close()
+	pipe(netConn, message.conn)
 }
 
-func pipe(client *connection, server net.Conn) {
+func pipe(client net.Conn, server net.Conn) {
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 
@@ -42,7 +39,7 @@ func pipe(client *connection, server net.Conn) {
 		if err == nil {
 			err = io.EOF
 		}
-		client.doTunnelClose(err)
+		client.Close()
 		server.Close()
 		return err
 	}
@@ -56,7 +53,4 @@ func pipe(client *connection, server net.Conn) {
 	_, err := io.Copy(client, server)
 	err = close(err)
 	wg.Wait()
-
-	// Write tunnel error after no more I/O is happening, just incase messages get out of order
-	client.writeErr(err)
 }

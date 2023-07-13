@@ -11,8 +11,7 @@ import (
 )
 
 var (
-	errFailedAuth       = errors.New("failed authentication")
-	errWrongMessageType = errors.New("wrong websocket message type")
+	errFailedAuth = errors.New("failed authentication")
 )
 
 type Authorizer func(req *http.Request) (clientKey string, authed bool, err error)
@@ -20,7 +19,7 @@ type ErrorWriter func(rw http.ResponseWriter, req *http.Request, code int, err e
 
 func DefaultErrorWriter(rw http.ResponseWriter, req *http.Request, code int, err error) {
 	rw.WriteHeader(code)
-	rw.Write([]byte(err.Error()))
+	_, _ = rw.Write([]byte(err.Error()))
 }
 
 type Server struct {
@@ -68,7 +67,11 @@ func (s *Server) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	session := s.sessions.add(clientKey, wsConn, peer)
+	session, err := s.sessions.add(clientKey, wsConn, peer)
+	if err != nil {
+		s.errorWriter(rw, req, 400, errors.Wrapf(err, "Error during creating session for host [%v]", clientKey))
+		return
+	}
 	session.auth = s.ClientConnectAuthorizer
 	defer s.sessions.remove(session)
 
