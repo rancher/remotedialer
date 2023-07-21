@@ -14,7 +14,7 @@ var (
 	TotalAddWS = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Subsystem: "session_server",
-			Name:      "total_add_websocket_session",
+			Name:      "add_websocket_session_total",
 			Help:      "Total count of added websocket sessions",
 		},
 		[]string{"clientkey", "peer"})
@@ -22,7 +22,7 @@ var (
 	TotalRemoveWS = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Subsystem: "session_server",
-			Name:      "total_remove_websocket_session",
+			Name:      "remove_websocket_session_total",
 			Help:      "Total count of removed websocket sessions",
 		},
 		[]string{"clientkey", "peer"})
@@ -30,7 +30,7 @@ var (
 	TotalAddConnectionsForWS = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Subsystem: "session_server",
-			Name:      "total_add_connections",
+			Name:      "add_connections_total",
 			Help:      "Total count of added connections",
 		},
 		[]string{"clientkey", "proto", "addr"},
@@ -39,7 +39,7 @@ var (
 	TotalRemoveConnectionsForWS = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Subsystem: "session_server",
-			Name:      "total_remove_connections",
+			Name:      "remove_connections_total",
 			Help:      "Total count of removed connections",
 		},
 		[]string{"clientkey", "proto", "addr"},
@@ -48,7 +48,7 @@ var (
 	TotalTransmitBytesOnWS = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Subsystem: "session_server",
-			Name:      "total_transmit_bytes",
+			Name:      "transmit_bytes_total",
 			Help:      "Total bytes transmitted",
 		},
 		[]string{"clientkey"},
@@ -57,7 +57,7 @@ var (
 	TotalTransmitErrorBytesOnWS = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Subsystem: "session_server",
-			Name:      "total_transmit_error_bytes",
+			Name:      "transmit_error_bytes_total",
 			Help:      "Total error bytes transmitted",
 		},
 		[]string{"clientkey"},
@@ -66,7 +66,7 @@ var (
 	TotalReceiveBytesOnWS = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Subsystem: "session_server",
-			Name:      "total_receive_bytes",
+			Name:      "receive_bytes_total",
 			Help:      "Total bytes received",
 		},
 		[]string{"clientkey"},
@@ -75,7 +75,7 @@ var (
 	TotalAddPeerAttempt = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Subsystem: "session_server",
-			Name:      "total_peer_ws_attempt",
+			Name:      "peer_ws_attempt_total",
 			Help:      "Total count of attempts to establish websocket session to other rancher-server",
 		},
 		[]string{"peer"},
@@ -83,7 +83,7 @@ var (
 	TotalPeerConnected = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Subsystem: "session_server",
-			Name:      "total_peer_ws_connected",
+			Name:      "peer_ws_connected_total",
 			Help:      "Total count of connected websocket sessions to other rancher-server",
 		},
 		[]string{"peer"},
@@ -91,7 +91,7 @@ var (
 	TotalPeerDisConnected = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Subsystem: "session_server",
-			Name:      "total_peer_ws_disconnected",
+			Name:      "peer_ws_disconnected_total",
 			Help:      "Total count of disconnected websocket sessions from other rancher-server",
 		},
 		[]string{"peer"},
@@ -101,7 +101,6 @@ var (
 // Register registers a series of session
 // metrics for Prometheus.
 func Register() {
-
 	prometheusMetrics = true
 
 	// Session metrics
@@ -228,6 +227,5 @@ func IncSMTotalPeerDisConnected(peer string) {
 			prometheus.Labels{
 				"peer": peer,
 			}).Inc()
-
 	}
 }

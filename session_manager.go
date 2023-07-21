@@ -55,13 +55,13 @@ func (sm *sessionManager) addListener(listener sessionListener) {
 
 	for k, sessions := range sm.clients {
 		for _, session := range sessions {
-			listener.sessionAdded(k, session.sessionKey)
+			_ = listener.sessionAdded(k, session.sessionKey)
 		}
 	}
 
 	for k, sessions := range sm.peers {
 		for _, session := range sessions {
-			listener.sessionAdded(k, session.sessionKey)
+			_ = listener.sessionAdded(k, session.sessionKey)
 		}
 	}
 }
@@ -89,9 +89,9 @@ func (sm *sessionManager) getDialer(clientKey string) (Dialer, error) {
 	return nil, fmt.Errorf("failed to find Session for client %s", clientKey)
 }
 
-func (sm *sessionManager) add(clientKey string, conn *websocket.Conn, peer bool) (*Session, error) {
+func (sm *sessionManager) add(ctx context.Context, clientKey string, conn *websocket.Conn, peer bool) (*Session, error) {
 	sessionKey := rand.Int63()
-	session, err := newSession(sessionKey, clientKey, conn)
+	session, err := newSession(ctx, sessionKey, clientKey, conn)
 	if err != nil {
 		return nil, err
 	}
@@ -107,7 +107,7 @@ func (sm *sessionManager) add(clientKey string, conn *websocket.Conn, peer bool)
 	metrics.IncSMTotalAddWS(clientKey, peer)
 
 	for l := range sm.listeners {
-		l.sessionAdded(clientKey, session.sessionKey)
+		_ = l.sessionAdded(clientKey, session.sessionKey)
 	}
 
 	return session, nil
@@ -142,7 +142,7 @@ func (sm *sessionManager) remove(s *Session) {
 	}
 
 	for l := range sm.listeners {
-		l.sessionRemoved(s.clientKey, s.sessionKey)
+		_ = l.sessionRemoved(s.clientKey, s.sessionKey)
 	}
 
 	s.Close()

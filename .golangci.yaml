@@ -1,0 +1,97 @@
+linters:
+  # We want to gradually introduce new linters to the project
+  disable-all: true
+  enable:
+    - asasalint
+    - asciicheck
+    - bidichk
+    - decorder
+    - dupl
+    - durationcheck
+    - errcheck
+    - errchkjson
+    - errname
+    - errorlint
+    - exhaustive
+    - exportloopref
+    - ginkgolinter
+    - gocheckcompilerdirectives
+    - gocritic
+    - goimports
+    - gosimple
+    - govet
+    - grouper
+    - ineffassign
+    - interfacebloat
+    - makezero
+    - misspell
+    - nakedret
+    - nilnil
+    - prealloc
+    - predeclared
+    - promlinter
+    - revive
+    - staticcheck
+    - stylecheck
+    - tagalign
+    - typecheck
+    - unconvert
+    - unused
+    - usestdlibvars
+    - whitespace
+
+    # linters to be enabled in the distant future:
+    # - cyclop
+    # - funlen
+    # - wrapcheck
+
+linters-settings:
+  exhaustive:
+    check:
+      - switch
+      - map
+
+  # goimports:
+  #   local-prefixes: github.com/loft-sh
+
+  govet:
+    enable:
+      - assign
+      - atomic
+      - atomicalign
+      - bools
+      - buildtag
+      - composites
+      - copylocks
+      - deepequalerrors
+      - errorsas
+      # - fieldalignment
+      - findcall
+      - framepointer
+      - httpresponse
+      - ifaceassert
+      - loopclosure
+      - lostcancel
+      - nilfunc
+      - sortslice
+      - stdmethods
+      - stringintconv
+      - structtag
+      - testinggoroutine
+      - tests
+      - unmarshal
+      - unreachable
+      - unusedresult
+
+  tagalign:
+    order:
+      - json
+      - yaml
+      - xml
+      - form
+
+issues:
+  # Maximum issues count per one linter. Set to 0 to disable. Default is 50.
+  max-issues-per-linter: 0
+  # Maximum count of issues with the same text. Set to 0 to disable. Default is 3.
+  max-same-issues: 0

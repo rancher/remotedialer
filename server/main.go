@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -12,8 +13,8 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
-	"github.com/rancher/remotedialer"
-	"github.com/sirupsen/logrus"
+	"github.com/loft-sh/remotedialer"
+	"k8s.io/klog/v2"
 )
 
 var (
@@ -39,17 +40,19 @@ func Client(server *remotedialer.Server, rw http.ResponseWriter, req *http.Reque
 	client := getClient(server, clientKey, timeout)
 
 	id := atomic.AddInt64(&counter, 1)
-	logrus.Infof("[%03d] REQ t=%s %s", id, timeout, url)
+
+	logger := klog.FromContext(req.Context())
+	logger.Info("Handling request", "id", id, "timeout", timeout, "url", url)
 
 	resp, err := client.Get(url)
 	if err != nil {
-		logrus.Errorf("[%03d] REQ ERR t=%s %s: %v", id, timeout, url, err)
+		logger.Error(err, "Failed to make request", "id", id, "timeout", timeout, "url", url)
 		remotedialer.DefaultErrorWriter(rw, req, 500, err)
 		return
 	}
 	defer resp.Body.Close()
 
-	logrus.Infof("[%03d] REQ OK t=%s %s", id, timeout, url)
+	logger.Info("Handling request", "id", id, "timeout", timeout, "url", url)
 	for k, v := range resp.Header {
 		for _, h := range v {
 			if rw.Header().Get(k) == "" {
@@ -60,8 +63,14 @@ func Client(server *remotedialer.Server, rw http.ResponseWriter, req *http.Reque
 		}
 	}
 	rw.WriteHeader(resp.StatusCode)
-	io.Copy(rw, resp.Body)
-	logrus.Infof("[%03d] REQ DONE t=%s %s", id, timeout, url)
+	_, err = io.Copy(rw, resp.Body)
+	if err != nil {
+		logger.Error(err, "Failed to copy response body", "id", id, "timeout", timeout, "url", url)
+		remotedialer.DefaultErrorWriter(rw, req, 500, err)
+		return
+	}
+
+	logger.Info("Done handling request", "id", id, "timeout", timeout, "url", url)
 }
 
 func getClient(server *remotedialer.Server, clientKey, timeout string) *http.Client {
@@ -107,7 +116,17 @@ func main() {
 	flag.Parse()
 
 	if debug {
-		logrus.SetLevel(logrus.DebugLevel)
+		klogFlagSet := &flag.FlagSet{}
+		klog.InitFlags(klogFlagSet)
+		if err := klogFlagSet.Set("v", "10"); err != nil {
+			klog.TODO().Error(err, "failed to set klog verbosity level")
+			os.Exit(1)
+		}
+		if err := klogFlagSet.Parse([]string{}); err != nil {
+			klog.TODO().Error(err, "failed to parse klog flags")
+			os.Exit(1)
+		}
+
 		remotedialer.PrintTunnelData = true
 	}
 
@@ -130,5 +149,8 @@ func main() {
 	})
 
 	fmt.Println("Listening on ", addr)
-	http.ListenAndServe(addr, router)
+	if err := http.ListenAndServe(addr, router); err != nil {
+		klog.TODO().Error(err, "Failed to listen and serve")
+		os.Exit(1)
+	}
 }

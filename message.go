@@ -17,7 +17,6 @@ const (
 type messageType byte
 
 type message struct {
-	err         error
 	messageType messageType
 	bytes       []byte
 	conn        net.Conn

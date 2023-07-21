@@ -11,7 +11,7 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/loft-sh/remotedialer/metrics"
-	"github.com/sirupsen/logrus"
+	"k8s.io/klog/v2"
 )
 
 var (
@@ -32,7 +32,7 @@ func (s *Server) AddPeer(url, id, token string) {
 		cancel: cancel,
 	}
 
-	logrus.Infof("Adding peer %s, %s", url, id)
+	klog.FromContext(ctx).Info("Adding peer", "url", url, "id", id)
 
 	s.peerLock.Lock()
 	defer s.peerLock.Unlock()
@@ -48,12 +48,12 @@ func (s *Server) AddPeer(url, id, token string) {
 	go peer.start(ctx, s)
 }
 
-func (s *Server) RemovePeer(id string) {
+func (s *Server) RemovePeer(ctx context.Context, id string) {
 	s.peerLock.Lock()
 	defer s.peerLock.Unlock()
 
 	if p, ok := s.peers[id]; ok {
-		logrus.Infof("Removing peer %s", id)
+		klog.FromContext(ctx).Info("Removing peer", "id", id)
 		p.cancel()
 	}
 	delete(s.peers, id)
@@ -83,6 +83,8 @@ func (p *peer) start(ctx context.Context, s *Server) {
 		HandshakeTimeout: HandshakeTimeOut,
 	}
 
+	logger := klog.FromContext(ctx)
+
 outer:
 	for {
 		select {
@@ -94,15 +96,16 @@ outer:
 		metrics.IncSMTotalAddPeerAttempt(p.id)
 		ws, _, err := dialer.Dial(p.url, headers)
 		if err != nil {
-			logrus.Errorf("Failed to connect to peer %s [local ID=%s]: %v", p.url, s.PeerID, err)
+			logger.Error(err, "Failed to connect to peer", "url", p.url, "id", s.PeerID)
 			time.Sleep(5 * time.Second)
 			continue
 		}
 		metrics.IncSMTotalPeerConnected(p.id)
 
-		session, err := NewClientSession(func(string, string) bool { return true }, ws)
+		session, err := NewClientSession(ctx, func(string, string) bool { return true }, ws)
 		if err != nil {
-			logrus.Errorf("Failed to connect to peer %s: %v", p.url, err)
+			logger.Error(err, "Failed to connect to peer", "url", p.url)
+
 			time.Sleep(5 * time.Second)
 			continue
 		}
@@ -122,7 +125,7 @@ outer:
 		session.Close()
 
 		if err != nil {
-			logrus.Errorf("Failed to serve peer connection %s: %v", p.id, err)
+			logger.Error(err, "Failed to serve peer connection", "id", p.id)
 		}
 
 		ws.Close()

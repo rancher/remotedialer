@@ -12,7 +12,8 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/hashicorp/yamux"
-	"github.com/sirupsen/logrus"
+	"github.com/loft-sh/remotedialer/log"
+	"k8s.io/klog/v2"
 )
 
 type Session struct {
@@ -38,12 +39,18 @@ func init() {
 	}
 }
 
-func NewClientSession(auth ConnectAuthorizer, conn *websocket.Conn) (*Session, error) {
-	return NewClientSessionWithDialer(auth, conn, nil)
+func NewClientSession(ctx context.Context, auth ConnectAuthorizer, conn *websocket.Conn) (*Session, error) {
+	return NewClientSessionWithDialer(ctx, auth, conn, nil)
 }
 
-func NewClientSessionWithDialer(auth ConnectAuthorizer, conn *websocket.Conn, dialer Dialer) (*Session, error) {
-	session, err := yamux.Client(newConn(conn), nil)
+func NewClientSessionWithDialer(ctx context.Context, auth ConnectAuthorizer, conn *websocket.Conn, dialer Dialer) (*Session, error) {
+	config := yamux.DefaultConfig()
+
+	// Override the default logger with our own
+	config.LogOutput = nil
+	config.Logger = &log.YamuxLogr{Logger: klog.FromContext(ctx)}
+
+	session, err := yamux.Client(newConn(conn), config)
 	if err != nil {
 		return nil, err
 	}
@@ -58,8 +65,14 @@ func NewClientSessionWithDialer(auth ConnectAuthorizer, conn *websocket.Conn, di
 	}, nil
 }
 
-func newSession(sessionKey int64, clientKey string, conn *websocket.Conn) (*Session, error) {
-	session, err := yamux.Server(newConn(conn), nil)
+func newSession(ctx context.Context, sessionKey int64, clientKey string, conn *websocket.Conn) (*Session, error) {
+	config := yamux.DefaultConfig()
+
+	// Override the default logger with our own
+	config.LogOutput = nil
+	config.Logger = &log.YamuxLogr{Logger: klog.FromContext(ctx)}
+
+	session, err := yamux.Server(newConn(conn), config)
 	if err != nil {
 		return nil, err
 	}
@@ -93,7 +106,7 @@ func (s *Session) serveMessage(ctx context.Context, conn net.Conn) error {
 	}
 
 	if PrintTunnelData {
-		logrus.Debug("REQUEST ", message)
+		klog.FromContext(ctx).V(1).Info("REQUEST", "message", message)
 	}
 
 	if message.messageType == Connect {
@@ -109,10 +122,10 @@ func (s *Session) serveMessage(ctx context.Context, conn net.Conn) error {
 	defer s.Unlock()
 
 	if message.messageType == AddClient && s.remoteClientKeys != nil {
-		err := s.addRemoteClient(message.address)
+		err := s.addRemoteClient(ctx, message.address)
 		return err
 	} else if message.messageType == RemoveClient {
-		err := s.removeRemoteClient(message.address)
+		err := s.removeRemoteClient(ctx, message.address)
 		return err
 	}
 
@@ -128,10 +141,10 @@ func parseAddress(address string) (string, int, error) {
 	return parts[0], v, err
 }
 
-func (s *Session) addRemoteClient(address string) error {
+func (s *Session) addRemoteClient(ctx context.Context, address string) error {
 	clientKey, sessionKey, err := parseAddress(address)
 	if err != nil {
-		return fmt.Errorf("invalid remote Session %s: %v", address, err)
+		return fmt.Errorf("invalid remote Session %s: %w", address, err)
 	}
 
 	keys := s.remoteClientKeys[clientKey]
@@ -142,26 +155,26 @@ func (s *Session) addRemoteClient(address string) error {
 	keys[sessionKey] = true
 
 	if PrintTunnelData {
-		logrus.Debugf("ADD REMOTE CLIENT %s, SESSION %d", address, s.sessionKey)
+		klog.FromContext(ctx).V(1).Info("ADD REMOTE CLIENT", "address", address, "session", s.sessionKey)
 	}
 
 	return nil
 }
 
-func (s *Session) removeRemoteClient(address string) error {
+func (s *Session) removeRemoteClient(ctx context.Context, address string) error {
 	clientKey, sessionKey, err := parseAddress(address)
 	if err != nil {
-		return fmt.Errorf("invalid remote Session %s: %v", address, err)
+		return fmt.Errorf("invalid remote Session %s: %w", address, err)
 	}
 
 	keys := s.remoteClientKeys[clientKey]
-	delete(keys, int(sessionKey))
+	delete(keys, sessionKey)
 	if len(keys) == 0 {
 		delete(s.remoteClientKeys, clientKey)
 	}
 
 	if PrintTunnelData {
-		logrus.Debugf("REMOVE REMOTE CLIENT %s, SESSION %d", address, s.sessionKey)
+		klog.FromContext(ctx).V(1).Info("REMOVE REMOTE CLIENT", "address", address, "session", s.sessionKey)
 	}
 
 	return nil

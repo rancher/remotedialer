@@ -7,7 +7,7 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
+	"k8s.io/klog/v2"
 )
 
 var (
@@ -18,7 +18,7 @@ type PeerAuthorizer func(req *http.Request, id, token string) bool
 type Authorizer func(req *http.Request) (clientKey string, authed bool, err error)
 type ErrorWriter func(rw http.ResponseWriter, req *http.Request, code int, err error)
 
-func DefaultErrorWriter(rw http.ResponseWriter, req *http.Request, code int, err error) {
+func DefaultErrorWriter(rw http.ResponseWriter, _ *http.Request, code int, err error) {
 	rw.WriteHeader(code)
 	_, _ = rw.Write([]byte(err.Error()))
 }
@@ -55,7 +55,9 @@ func (s *Server) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	logrus.Infof("Handling backend connection request [%s]", clientKey)
+	logger := klog.FromContext(req.Context())
+
+	logger.Info("Handling backend connection request", "clientKey", clientKey)
 
 	upgrader := websocket.Upgrader{
 		HandshakeTimeout: 5 * time.Second,
@@ -69,7 +71,7 @@ func (s *Server) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	session, err := s.sessions.add(clientKey, wsConn, peer)
+	session, err := s.sessions.add(req.Context(), clientKey, wsConn, peer)
 	if err != nil {
 		s.errorWriter(rw, req, 400, errors.Wrapf(err, "Error during creating session for host [%v]", clientKey))
 		return
@@ -80,7 +82,7 @@ func (s *Server) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	code, err := session.Serve(req.Context())
 	if err != nil {
 		// Hijacked so we can't write to the client
-		logrus.Infof("error in remotedialer server [%d]: %v", code, err)
+		logger.Error(err, "Error in remotedialer server", "code", code)
 	}
 }
 

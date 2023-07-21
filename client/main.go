@@ -4,9 +4,10 @@ import (
 	"context"
 	"flag"
 	"net/http"
+	"os"
 
-	"github.com/rancher/remotedialer"
-	"github.com/sirupsen/logrus"
+	"github.com/loft-sh/remotedialer"
+	"k8s.io/klog/v2"
 )
 
 var (
@@ -22,12 +23,27 @@ func main() {
 	flag.Parse()
 
 	if debug {
-		logrus.SetLevel(logrus.DebugLevel)
+		klogFlagSet := &flag.FlagSet{}
+		klog.InitFlags(klogFlagSet)
+		if err := klogFlagSet.Set("v", "10"); err != nil {
+			klog.TODO().Error(err, "failed to set klog verbosity level")
+			os.Exit(1)
+		}
+		if err := klogFlagSet.Parse([]string{}); err != nil {
+			klog.TODO().Error(err, "failed to parse klog flags")
+			os.Exit(1)
+		}
 	}
 
 	headers := http.Header{
 		"X-Tunnel-ID": []string{id},
 	}
 
-	remotedialer.ClientConnect(context.Background(), addr, headers, nil, func(string, string) bool { return true }, nil)
+	ctx := context.Background()
+
+	err := remotedialer.ClientConnect(ctx, addr, headers, nil, func(string, string) bool { return true }, nil)
+
+	if err != nil {
+		klog.FromContext(ctx).Error(err, "Failed to connect to proxy")
+	}
 }

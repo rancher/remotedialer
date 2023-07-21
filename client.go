@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
-	"github.com/sirupsen/logrus"
+	"k8s.io/klog/v2"
 )
 
 // ConnectAuthorizer custom for authorization
@@ -19,7 +19,7 @@ func ClientConnect(ctx context.Context, wsURL string, headers http.Header, diale
 	auth ConnectAuthorizer, onConnect func(context.Context, *Session) error) error {
 	if err := ConnectToProxy(ctx, wsURL, headers, auth, dialer, onConnect); err != nil {
 		if !errors.Is(err, context.Canceled) {
-			logrus.WithError(err).Error("Remotedialer proxy error")
+			klog.FromContext(ctx).Error(err, "Remotedialer proxy error")
 			time.Sleep(time.Duration(5) * time.Second)
 		}
 		return err
@@ -29,7 +29,7 @@ func ClientConnect(ctx context.Context, wsURL string, headers http.Header, diale
 
 // ConnectToProxy connect to websocket server
 func ConnectToProxy(rootCtx context.Context, proxyURL string, headers http.Header, auth ConnectAuthorizer, dialer *websocket.Dialer, onConnect func(context.Context, *Session) error) error {
-	logrus.WithField("url", proxyURL).Info("Connecting to proxy")
+	klog.FromContext(rootCtx).Info("Connecting to proxy", "url", proxyURL)
 
 	if dialer == nil {
 		dialer = &websocket.Dialer{Proxy: http.ProxyFromEnvironment, HandshakeTimeout: HandshakeTimeOut}
@@ -38,14 +38,14 @@ func ConnectToProxy(rootCtx context.Context, proxyURL string, headers http.Heade
 	if err != nil {
 		if resp == nil {
 			if !errors.Is(err, context.Canceled) {
-				logrus.WithError(err).Errorf("Failed to connect to proxy. Empty dialer response")
+				klog.FromContext(rootCtx).Error(err, "Failed to connect to proxy. Empty dialer response")
 			}
 		} else {
 			rb, err2 := io.ReadAll(resp.Body)
 			if err2 != nil {
-				logrus.WithError(err).Errorf("Failed to connect to proxy. Response status: %v - %v. Couldn't read response body (err: %v)", resp.StatusCode, resp.Status, err2)
+				klog.FromContext(rootCtx).Error(err, "Failed to connect to proxy. Empty dialer response", "statusCode", resp.StatusCode, "status", resp.Status, "err2", err2)
 			} else {
-				logrus.WithError(err).Errorf("Failed to connect to proxy. Response status: %v - %v. Response body: %s", resp.StatusCode, resp.Status, rb)
+				klog.FromContext(rootCtx).Error(err, "Failed to connect to proxy", "statusCode", resp.StatusCode, "status", resp.Status, "body", string(rb))
 			}
 		}
 		return err
@@ -57,7 +57,7 @@ func ConnectToProxy(rootCtx context.Context, proxyURL string, headers http.Heade
 	ctx, cancel := context.WithCancel(rootCtx)
 	defer cancel()
 
-	session, err := NewClientSession(auth, ws)
+	session, err := NewClientSession(ctx, auth, ws)
 	if err != nil {
 		return err
 	}
@@ -78,7 +78,7 @@ func ConnectToProxy(rootCtx context.Context, proxyURL string, headers http.Heade
 
 	select {
 	case <-ctx.Done():
-		logrus.WithField("url", proxyURL).WithField("err", ctx.Err()).Info("Proxy done")
+		klog.FromContext(ctx).Info("Proxy done", "url", proxyURL, "err", ctx.Err())
 		return nil
 	case err := <-result:
 		return err

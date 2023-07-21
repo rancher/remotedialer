@@ -35,7 +35,7 @@ func pipe(client net.Conn, server net.Conn) {
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 
-	close := func(err error) error {
+	closeOnError := func(err error) error {
 		if err == nil {
 			err = io.EOF
 		}
@@ -47,10 +47,10 @@ func pipe(client net.Conn, server net.Conn) {
 	go func() {
 		defer wg.Done()
 		_, err := io.Copy(server, client)
-		close(err)
+		_ = closeOnError(err)
 	}()
 
 	_, err := io.Copy(client, server)
-	err = close(err)
+	_ = closeOnError(err)
 	wg.Wait()
 }

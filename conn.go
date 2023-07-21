@@ -28,14 +28,13 @@ func (c *conn) Read(b []byte) (n int, err error) {
 
 	for {
 		messageType, reader, err := c.wsConn.NextReader()
-		if err != nil {
+		switch {
+		case err != nil:
 			return 0, err
-		} else if messageType != websocket.BinaryMessage {
-			if messageType == websocket.CloseMessage {
-				_ = c.wsConn.Close()
-				return 0, io.EOF
-			}
-		} else {
+		case messageType != websocket.BinaryMessage && messageType == websocket.CloseMessage:
+			_ = c.wsConn.Close()
+			return 0, io.EOF
+		default:
 			c.currentReader = reader
 			cont, n, err := c.read(b)
 			if !cont || err != nil {
