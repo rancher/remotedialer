@@ -103,19 +103,23 @@ func (c *connection) Write(b []byte) (int, error) {
 }
 
 func (c *connection) OnPause() {
+	metrics.IncSMTTotalPauseReceived(c.session.clientKey)
 	c.backPressure.OnPause()
 }
 
 func (c *connection) OnResume() {
+	metrics.IncSMTTotalResumeReceived(c.session.clientKey)
 	c.backPressure.OnResume()
 }
 
 func (c *connection) Pause() {
+	metrics.IncSMTTotalPauseSent(c.session.clientKey)
 	msg := newPause(c.connID)
 	_, _ = c.session.writeMessage(c.writeDeadline, msg)
 }
 
 func (c *connection) Resume() {
+	metrics.IncSMTTotalResumeSent(c.session.clientKey)
 	msg := newResume(c.connID)
 	_, _ = c.session.writeMessage(c.writeDeadline, msg)
 }

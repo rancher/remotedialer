@@ -96,6 +96,38 @@ var (
 		},
 		[]string{"peer"},
 	)
+	TotalPauseReceived = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Subsystem: "session_server",
+			Name:      "total_pause_received",
+			Help:      "Total count of pause requests received",
+		},
+		[]string{"clientkey"},
+	)
+	TotalResumeReceived = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Subsystem: "session_server",
+			Name:      "total_resume_received",
+			Help:      "Total count of resume requests received",
+		},
+		[]string{"clientkey"},
+	)
+	TotalPauseSent = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Subsystem: "session_server",
+			Name:      "total_pause_sent",
+			Help:      "Total count of pause requests sent",
+		},
+		[]string{"clientkey"},
+	)
+	TotalResumeSent = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Subsystem: "session_server",
+			Name:      "total_resume_sent",
+			Help:      "Total count of resume requests sent",
+		},
+		[]string{"clientkey"},
+	)
 )
 
 // Register registers a series of session
@@ -115,6 +147,8 @@ func Register() {
 	prometheus.MustRegister(TotalAddPeerAttempt)
 	prometheus.MustRegister(TotalPeerConnected)
 	prometheus.MustRegister(TotalPeerDisConnected)
+	prometheus.MustRegister(TotalPause)
+	prometheus.MustRegister(TotalResume)
 }
 
 func init() {
@@ -229,5 +263,41 @@ func IncSMTotalPeerDisConnected(peer string) {
 				"peer": peer,
 			}).Inc()
 
+	}
+}
+
+func IncSMTTotalPauseReceived(clientKey string) {
+	if prometheusMetrics {
+		TotalPauseReceived.With(
+			prometheus.Labels{
+				"clientkey": clientKey,
+			}).Inc()
+	}
+}
+
+func IncSMTTotalResumeReceived(clientKey string) {
+	if prometheusMetrics {
+		TotalResumeReceived.With(
+			prometheus.Labels{
+				"clientkey": clientKey,
+			}).Inc()
+	}
+}
+
+func IncSMTTotalPauseSent(clientKey string) {
+	if prometheusMetrics {
+		TotalPauseSent.With(
+			prometheus.Labels{
+				"clientkey": clientKey,
+			}).Inc()
+	}
+}
+
+func IncSMTTotalResumeSent(clientKey string) {
+	if prometheusMetrics {
+		TotalResumeSent.With(
+			prometheus.Labels{
+				"clientkey": clientKey,
+			}).Inc()
 	}
 }
