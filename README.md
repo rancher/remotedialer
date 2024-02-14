@@ -79,6 +79,18 @@ The clusterconnected controller in Rancher uses the established tunnel to check
 that clusters are still responsive and sets alert conditions on the cluster
 object if they are not.
 
+#### HA operation (peering)
+
+remotedialer supports a mode where multiple servers can be configured as peers.
+In that mode all servers maintain a mapping of all client connections to all other
+servers, and can forward connections appropriately.
+
+Therefore, http requests to any of the clients can be resolved by any of the peer
+servers. This is useful for high availability, and Rancher leverages that
+functionality among replicas of the main pod.
+
+Peers authenticate to one another via a shared token.
+
 Running Locally
 ---------------
 
@@ -150,3 +162,32 @@ curl http://192.168.0.42:8123/client/foo/http/127.0.0.1:8125/bigfile
 where `foo` is the hardcoded client ID for this test server.
 
 This test server only supports GET requests.
+
+### HA Usage
+
+To test remotedialer in HA mode, first start the dummy server from an appropriate directory, eg.:
+
+```shell
+cd /tmp
+mkdir www
+cd www
+echo 'hello' > bigfile
+/path/to/dummy -listen :8125
+```
+
+Then start two peer remotedialer servers with the `-peers id:token:url` flag:
+
+```shell
+./server/server -debug -id first -token aaa -listen :8123 -peers second:aaa:ws://localhost:8124/connect &
+./server/server -debug -id second -token aaa -listen :8124 -peers first:aaa:ws://localhost:8123/connect
+```
+
+Then connect a client to the first server, eg:
+```shell
+./client/client -connect ws://localhost:8123/connect
+```
+
+Finally, use the second server to make a request to the client via the first server:
+```
+curl http://localhost:8124/client/foo/http/127.0.0.1:8125/
+```
