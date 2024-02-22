@@ -12,8 +12,12 @@ import (
 )
 
 const (
-	MaxBuffer = 1 << 21
+	MaxBuffer          = 1 << 21
+	DefaultReadTimeout = 1 * time.Minute
 )
+
+var ErrReadTimeoutExceeded = errors.New("read timeout exceeded")
+var ErrReadDeadlineExceeded = errors.New("deadline exceeded")
 
 type readBuffer struct {
 	id, readCount, offerCount int64
@@ -22,6 +26,7 @@ type readBuffer struct {
 	buf                       bytes.Buffer
 	err                       error
 	backPressure              *backPressure
+	readTimeout               time.Duration
 }
 
 func newReadBuffer(id int64, backPressure *backPressure) *readBuffer {
@@ -31,6 +36,7 @@ func newReadBuffer(id int64, backPressure *backPressure) *readBuffer {
 		cond: sync.Cond{
 			L: &sync.Mutex{},
 		},
+		readTimeout: DefaultReadTimeout,
 	}
 }
 
@@ -100,13 +106,15 @@ func (r *readBuffer) Read(b []byte) (int, error) {
 		now := time.Now()
 		if !r.deadline.IsZero() {
 			if now.After(r.deadline) {
-				return 0, errors.New("deadline exceeded")
+				return 0, ErrReadDeadlineExceeded
 			}
 		}
 
 		var t *time.Timer
 		if !r.deadline.IsZero() {
 			t = time.AfterFunc(r.deadline.Sub(now), func() { r.cond.Broadcast() })
+		} else {
+			t = time.AfterFunc(r.readTimeout, func() { r.Close(ErrReadTimeoutExceeded) })
 		}
 		r.cond.Wait()
 		if t != nil {
