@@ -125,7 +125,7 @@ func (c *connection) writeErr(err error) {
 		msg := newErrorMessage(c.connID, err)
 		metrics.AddSMTotalTransmitErrorBytesOnWS(c.session.clientKey, float64(len(msg.Bytes())))
 		if _, err2 := c.session.writeMessage(c.writeDeadline, msg); err2 != nil {
-			logrus.Warnf("encountered error %q while writing error %q to close remotedialer connection %v", err2, err, c.connID)
+			logrus.Warnf("[%d] encountered error %q while writing error %q to close remotedialer", c.connID, err2, err)
 		}
 	}
 }
