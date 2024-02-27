@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"sync"
 	"time"
 
@@ -17,7 +18,6 @@ const (
 )
 
 var ErrReadTimeoutExceeded = errors.New("read timeout exceeded")
-var ErrReadDeadlineExceeded = errors.New("deadline exceeded")
 
 type readBuffer struct {
 	id, readCount, offerCount int64
@@ -106,7 +106,7 @@ func (r *readBuffer) Read(b []byte) (int, error) {
 		now := time.Now()
 		if !r.deadline.IsZero() {
 			if now.After(r.deadline) {
-				return 0, ErrReadDeadlineExceeded
+				return 0, fmt.Errorf("remotedialer readbuffer Read deadline exceeded: %w", os.ErrDeadlineExceeded)
 			}
 		}
 

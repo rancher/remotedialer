@@ -3,6 +3,7 @@ package remotedialer
 import (
 	"bytes"
 	"fmt"
+	"os"
 	"sync"
 	"testing"
 	"time"
@@ -40,7 +41,7 @@ func Test_readBuffer_Read(t *testing.T) {
 			timeout: 100 * time.Millisecond,
 			want:    0,
 			wantErr: func(t assert.TestingT, err error, msgAndArgs ...interface{}) bool {
-				return assert.Equal(t, err, ErrReadTimeoutExceeded)
+				return assert.ErrorIs(t, err, ErrReadTimeoutExceeded)
 			},
 		},
 		{
@@ -52,7 +53,7 @@ func Test_readBuffer_Read(t *testing.T) {
 			offer:    nil,
 			want:     0,
 			wantErr: func(t assert.TestingT, err error, msgAndArgs ...interface{}) bool {
-				return assert.Equal(t, err, ErrReadDeadlineExceeded)
+				return assert.ErrorIs(t, err, os.ErrDeadlineExceeded)
 			},
 		},
 		{
@@ -64,7 +65,7 @@ func Test_readBuffer_Read(t *testing.T) {
 			offer:    nil,
 			want:     0,
 			wantErr: func(t assert.TestingT, err error, msgAndArgs ...interface{}) bool {
-				return assert.Equal(t, err, ErrReadDeadlineExceeded)
+				return assert.ErrorIs(t, err, os.ErrDeadlineExceeded)
 			},
 		},
 	}
