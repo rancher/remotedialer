@@ -184,7 +184,7 @@ Then start two peer remotedialer servers with the `-peers id:token:url` flag:
 
 Then connect a client to the first server, eg:
 ```shell
-./client/client -connect ws://localhost:8123/connect
+./client/client -id foo -connect ws://localhost:8123/connect
 ```
 
 Finally, use the second server to make a request to the client via the first server:
