@@ -82,12 +82,15 @@ object if they are not.
 #### HA operation (peering)
 
 remotedialer supports a mode where multiple servers can be configured as peers.
-In that mode all servers maintain a mapping of all client connections to all other
-servers, and can forward connections appropriately.
+In that mode all servers maintain a mapping of all remotedialer client connections
+to all other servers, and can route incoming requests appropriately.
 
-Therefore, http requests to any of the clients can be resolved by any of the peer
-servers. This is useful for high availability, and Rancher leverages that
-functionality among replicas of the main pod.
+Therefore, http requests referring any of the remotedialer clients can be resolved
+by any of the peer servers. This is useful for high availability, and Rancher
+leverages that functionality to distribute downstream clusters (running agents
+acting as remotedialer clients) among replica pods (acting as remotedialer
+server peers). In case one Rancher replica pod breaks down, Rancher will
+reassign its downstream clusters to others.
 
 Peers authenticate to one another via a shared token.
 
