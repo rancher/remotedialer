@@ -31,6 +31,10 @@ func newSessionManager() *sessionManager {
 	}
 }
 
+func ToDialer(s *Session, prefix string) Dialer {
+	return toDialer(s, prefix)
+}
+
 func toDialer(s *Session, prefix string) Dialer {
 	return func(ctx context.Context, proto, address string) (net.Conn, error) {
 		if prefix == "" {

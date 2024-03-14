@@ -64,12 +64,16 @@ func (w *wsConn) setupDeadline() {
 		if err := w.conn.SetReadDeadline(time.Now().Add(PingWaitDuration)); err != nil {
 			return err
 		}
+		w.Lock()
+		defer w.Unlock()
 		return w.conn.SetWriteDeadline(time.Now().Add(PingWaitDuration))
 	})
 	w.conn.SetPongHandler(func(string) error {
 		if err := w.conn.SetReadDeadline(time.Now().Add(PingWaitDuration)); err != nil {
 			return err
 		}
+		w.Lock()
+		defer w.Unlock()
 		return w.conn.SetWriteDeadline(time.Now().Add(PingWaitDuration))
 	})
 
