@@ -106,8 +106,8 @@ standalone mode FOR TESTING ONLY. These are found in the `server/` and
 Compile the server and client:
 
 ```
-go build -o server/server server/main.go
-go build -o client/client client/main.go
+make server
+make client
 ```
 
 ### Run
@@ -127,7 +127,7 @@ target. The remotedialer server also needs to be reachable by the client.
 For testing purposes, a basic HTTP file server is provided. Build the server with:
 
 ```
-go build -o dummy/dummy dummy/main.go
+make dummy
 ```
 
 Create a directory with files to serve, then run the web server from that directory:
