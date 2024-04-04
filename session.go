@@ -162,10 +162,17 @@ func (s *Session) startPings(rootCtx context.Context) {
 		t := time.NewTicker(PingWriteInterval)
 		defer t.Stop()
 
+		syncConnections := time.NewTicker(SyncConnectionsInterval)
+		defer syncConnections.Stop()
+
 		for {
 			select {
 			case <-ctx.Done():
 				return
+			case <-syncConnections.C:
+				if err := s.sendSyncConnections(); err != nil {
+					logrus.WithError(err).Error("Error syncing connections")
+				}
 			case <-t.C:
 				if err := s.sendPing(); err != nil {
 					logrus.WithError(err).Error("Error writing ping")

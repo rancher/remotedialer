@@ -27,6 +27,8 @@ func (s *Session) serveMessage(ctx context.Context, reader io.Reader) error {
 		return s.addRemoteClient(message.address)
 	case RemoveClient:
 		return s.removeRemoteClient(message.address)
+	case SyncConnections:
+		return s.syncConnections(message.body)
 	case Data:
 		s.connectionData(message.connID, message.body)
 	case Pause:
@@ -85,6 +87,16 @@ func (s *Session) removeRemoteClient(address string) error {
 	}
 
 	return nil
+}
+
+// syncConnections closes any session connection that is not present in the IDs received from the client
+func (s *Session) syncConnections(r io.Reader) error {
+	payload, err := io.ReadAll(r)
+	if err != nil {
+		return fmt.Errorf("reading message body: %w", err)
+	}
+
+	return s.lockedSyncConnections(payload)
 }
 
 // closeConnection removes a connection for a given ID from the session, sending an error message to communicate the closing to the other end.
