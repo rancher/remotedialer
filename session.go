@@ -83,11 +83,17 @@ func (s *Session) removeConnection(connID int64) *connection {
 	s.Lock()
 	defer s.Unlock()
 
-	conn := s.conns[connID]
-	delete(s.conns, connID)
+	conn := s.lockedRemoveConnection(connID)
 	if PrintTunnelData {
 		defer logrus.Debugf("CONNECTIONS %d %d", s.sessionKey, len(s.conns))
 	}
+	return conn
+}
+
+// lockedRemoveConnection removes a given connection from the session. The session lock must be held by the caller when calling this method
+func (s *Session) lockedRemoveConnection(connID int64) *connection {
+	conn := s.conns[connID]
+	delete(s.conns, connID)
 	return conn
 }
 
@@ -147,13 +153,18 @@ func (s *Session) startPings(rootCtx context.Context) {
 			case <-ctx.Done():
 				return
 			case <-t.C:
-				if err := s.conn.WriteControl(websocket.PingMessage, time.Now().Add(PingWaitDuration), []byte("")); err != nil {
+				if err := s.sendPing(); err != nil {
 					logrus.WithError(err).Error("Error writing ping")
 				}
 				logrus.Debug("Wrote ping")
 			}
 		}
 	}()
+}
+
+// sendPing sends a Ping control message to the peer
+func (s *Session) sendPing() error {
+	return s.conn.WriteControl(websocket.PingMessage, time.Now().Add(PingWaitDuration), []byte(""))
 }
 
 func (s *Session) stopPings() {
