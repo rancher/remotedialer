@@ -26,3 +26,11 @@ func decodeConnectionIDs(payload []byte) ([]int64, error) {
 	}
 	return result, nil
 }
+
+func newSyncConnectionsMessage(connectionIDs []int64) *message {
+	return &message{
+		id:          nextid(),
+		messageType: SyncConnections,
+		bytes:       encodeConnectionIDs(connectionIDs),
+	}
+}

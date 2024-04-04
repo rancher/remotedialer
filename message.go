@@ -32,6 +32,7 @@ const (
 	Pause
 	// Resume is a message type used to resume a paused connection
 	Resume
+	SyncConnections
 )
 
 var (
@@ -244,6 +245,8 @@ func (m *message) String() string {
 		return fmt.Sprintf("%d PAUSE        [%d]", m.id, m.connID)
 	case Resume:
 		return fmt.Sprintf("%d RESUME       [%d]", m.id, m.connID)
+	case SyncConnections:
+		return fmt.Sprintf("%d SYNCCONNS    [%d]", m.id, m.connID)
 	}
 	return fmt.Sprintf("%d UNKNOWN[%d]: %d", m.id, m.connID, m.messageType)
 }
