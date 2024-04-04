@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -103,6 +104,19 @@ func (s *Session) getConnection(connID int64) *connection {
 	defer s.RUnlock()
 
 	return s.conns[connID]
+}
+
+// activeConnectionIDs returns an ordered list of IDs for the currently active connections
+func (s *Session) activeConnectionIDs() []int64 {
+	s.RLock()
+	defer s.RUnlock()
+
+	res := make([]int64, 0, len(s.conns))
+	for id := range s.conns {
+		res = append(res, id)
+	}
+	sort.Slice(res, func(i, j int) bool { return res[i] < res[j] })
+	return res
 }
 
 // addSessionKey registers a new session key for a given client key
