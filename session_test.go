@@ -6,6 +6,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 )
 
 var dummyConnectionsNextID int64 = 1
@@ -73,5 +74,74 @@ func TestSession_sessionKeys(t *testing.T) {
 	s.removeSessionKey(clientKey, sessionKey)
 	if got, want := len(s.remoteClientKeys), 0; got != want {
 		t.Errorf("incorrect number of remote client keys after removal, got: %d, want %d", got, want)
+	}
+}
+
+func TestSession_activeConnectionIDs(t *testing.T) {
+	tests := []struct {
+		name     string
+		conns    map[int64]*connection
+		expected []int64
+	}{
+		{
+			name:     "no connections",
+			conns:    map[int64]*connection{},
+			expected: []int64{},
+		},
+		{
+			name: "single",
+			conns: map[int64]*connection{
+				1234: nil,
+			},
+			expected: []int64{1234},
+		},
+		{
+			name: "multiple connections",
+			conns: map[int64]*connection{
+				5:  nil,
+				20: nil,
+				3:  nil,
+			},
+			expected: []int64{3, 5, 20},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			session := Session{conns: tt.conns}
+			if got, want := session.activeConnectionIDs(), tt.expected; !reflect.DeepEqual(got, want) {
+				t.Errorf("incorrect result, got: %v, want: %v", got, want)
+			}
+		})
+	}
+}
+
+func TestSession_sendPings(t *testing.T) {
+	conn := testServerWS(t, nil)
+	session := newSession(rand.Int63(), "pings-test", newWSConn(conn))
+
+	var pings int
+	pongHandler := conn.PongHandler()
+	conn.SetPongHandler(func(appData string) error {
+		pings++
+		return pongHandler(appData)
+	})
+	go func() {
+		// Read channel must be consumed (even if discarded) for control messages to work:
+		// https://pkg.go.dev/github.com/gorilla/websocket#hdr-Control_Messages
+		for {
+			if _, _, err := conn.NextReader(); err != nil {
+				return
+			}
+		}
+	}()
+
+	for i := 1; i <= 4; i++ {
+		if err := session.sendPing(); err != nil {
+			t.Fatal(err)
+		}
+		time.Sleep(50 * time.Millisecond)
+		if got, want := pings, i; got != want {
+			t.Errorf("incorrect number of pings received by server, got: %d, want: %d", got, want)
+		}
 	}
 }
