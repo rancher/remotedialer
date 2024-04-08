@@ -41,6 +41,16 @@ func Test_encodeConnectionIDs(t *testing.T) {
 	}
 }
 
+func Test_removedFromSlice(t *testing.T) {
+	server := []int64{3, 5, 20, 50, 100}
+	client := []int64{3, 50, 100, 200}
+	expected := []int64{5, 20}
+
+	if got, want := removedFromSlice(server, client), expected; !reflect.DeepEqual(got, want) {
+		t.Errorf("unexpected result, got: %v, want: %v", got, want)
+	}
+}
+
 func TestSession_sendSyncConnections(t *testing.T) {
 	data := make(chan []byte)
 	conn := testServerWS(t, data)

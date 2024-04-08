@@ -52,13 +52,8 @@ func (s *Session) lockedSyncConnections(payload []byte) error {
 	if err != nil {
 		return fmt.Errorf("decoding sync connections payload: %w", err)
 	}
-	for _, id := range s.activeConnectionIDs() {
-		if i := sliceIndex(clientIDs, id); i >= 0 {
-			// Connection is still active, do nothing
-			clientIDs = append(clientIDs[:i], clientIDs[i+1:]...) // IDs are unique, skip in next iteration
-			continue
-		}
-
+	serverIDs := s.activeConnectionIDs()
+	for _, id := range removedFromSlice(serverIDs, clientIDs) {
 		// Connection no longer active in the client, close it server-side
 		conn := s.lockedRemoveConnection(id)
 		if conn != nil {
@@ -69,11 +64,19 @@ func (s *Session) lockedSyncConnections(payload []byte) error {
 	return nil
 }
 
-func sliceIndex(s []int64, id int64) int {
-	for x := range s {
-		if s[x] == id {
-			return x
+func removedFromSlice(a, b []int64) (res []int64) {
+	var i, j int
+	for i < len(a) && j < len(b) {
+		if a[i] < b[j] { // present in "a", not in "b"
+			res = append(res, a[i])
+			i++
+		} else if a[i] > b[j] { // present in "b", not in "a"
+			j++
+		} else { // present in both
+			i++
+			j++
 		}
 	}
-	return -1
+	res = append(res, a[i:]...) // any remainders in "a" are also removed from "b"
+	return
 }
