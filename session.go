@@ -67,6 +67,12 @@ func newSession(sessionKey int64, clientKey string, conn *websocket.Conn) *Sessi
 	}
 }
 
+func (s *Session) getConnection(connID int64) *connection {
+	s.Lock()
+	defer s.Unlock()
+	return s.conns[connID]
+}
+
 func (s *Session) startPings(rootCtx context.Context) {
 	ctx, cancel := context.WithCancel(rootCtx)
 	s.pingCancel = cancel

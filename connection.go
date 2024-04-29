@@ -54,13 +54,13 @@ func (c *connection) doTunnelClose(err error) {
 	c.buffer.Close(c.err)
 }
 
-func (c *connection) OnData(m *message) error {
+func (c *connection) OnData(r io.Reader) error {
 	if PrintTunnelData {
 		defer func() {
 			logrus.Debugf("ONDATA  [%d] %s", c.connID, c.buffer.Status())
 		}()
 	}
-	return c.buffer.Offer(m.body)
+	return c.buffer.Offer(r)
 }
 
 func (c *connection) Close() error {
