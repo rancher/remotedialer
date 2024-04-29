@@ -95,8 +95,13 @@ func (s *Session) syncConnections(r io.Reader) error {
 	if err != nil {
 		return fmt.Errorf("reading message body: %w", err)
 	}
+	clientActiveConnections, err := decodeConnectionIDs(payload)
+	if err != nil {
+		return fmt.Errorf("decoding sync connections payload: %w", err)
+	}
 
-	return s.lockedSyncConnections(payload)
+	s.closeStaleConnections(clientActiveConnections)
+	return nil
 }
 
 // closeConnection removes a connection for a given ID from the session, sending an error message to communicate the closing to the other end.

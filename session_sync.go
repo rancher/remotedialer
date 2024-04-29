@@ -45,15 +45,18 @@ func (s *Session) sendSyncConnections() error {
 	return err
 }
 
-// lockedSyncConnections closes any session connection that is not present in the IDs received from the client
+// closeMissingConnections closes any session connection that is not present in the IDs received from the client
 // The session lock must be hold by the caller when calling this method
-func (s *Session) lockedSyncConnections(payload []byte) error {
-	clientIDs, err := decodeConnectionIDs(payload)
-	if err != nil {
-		return fmt.Errorf("decoding sync connections payload: %w", err)
-	}
+func (s *Session) closeStaleConnections(clientIDs []int64) {
 	serverIDs := s.activeConnectionIDs()
-	for _, id := range removedFromSlice(serverIDs, clientIDs) {
+	toClose := removedFromSlice(serverIDs, clientIDs)
+	if len(toClose) == 0 {
+		return
+	}
+
+	s.Lock()
+	defer s.Unlock()
+	for _, id := range toClose {
 		// Connection no longer active in the client, close it server-side
 		conn := s.lockedRemoveConnection(id)
 		if conn != nil {
@@ -61,7 +64,6 @@ func (s *Session) lockedSyncConnections(payload []byte) error {
 			conn.doTunnelClose(errCloseSyncConnections)
 		}
 	}
-	return nil
 }
 
 func removedFromSlice(a, b []int64) (res []int64) {
