@@ -119,10 +119,11 @@ func TestSession_sendPings(t *testing.T) {
 	conn := testServerWS(t, nil)
 	session := newSession(rand.Int63(), "pings-test", newWSConn(conn))
 
-	var pings int
 	pongHandler := conn.PongHandler()
+
+	pongs := make(chan struct{})
 	conn.SetPongHandler(func(appData string) error {
-		pings++
+		pongs <- struct{}{}
 		return pongHandler(appData)
 	})
 	go func() {
@@ -139,9 +140,12 @@ func TestSession_sendPings(t *testing.T) {
 		if err := session.sendPing(); err != nil {
 			t.Fatal(err)
 		}
-		time.Sleep(50 * time.Millisecond)
-		if got, want := pings, i; got != want {
-			t.Errorf("incorrect number of pings received by server, got: %d, want: %d", got, want)
+		select {
+		// pong received, ping was successful
+		case <-pongs:
+		// High timeout on purpose to avoid flakiness
+		case <-time.After(5 * time.Second):
+			t.Errorf("ping %d not received in time", i)
 		}
 	}
 }
