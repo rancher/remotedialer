@@ -66,6 +66,8 @@ func (s *Session) closeStaleConnections(clientIDs []int64) {
 	}
 }
 
+// removedFromSlice compares two sorted slices and returns those items present in a that are not present in b
+// similar to coreutil's "comm -23"
 func removedFromSlice(a, b []int64) (res []int64) {
 	var i, j int
 	for i < len(a) && j < len(b) {
