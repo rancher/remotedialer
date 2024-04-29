@@ -17,7 +17,7 @@ import (
 )
 
 type Session struct {
-	sync.Mutex
+	sync.RWMutex
 
 	nextConnID       int64
 	clientKey        string
@@ -67,10 +67,68 @@ func newSession(sessionKey int64, clientKey string, conn *websocket.Conn) *Sessi
 	}
 }
 
-func (s *Session) getConnection(connID int64) *connection {
+// addConnection safely registers a new connection in the connections map
+func (s *Session) addConnection(connID int64, conn *connection) {
 	s.Lock()
 	defer s.Unlock()
+
+	s.conns[connID] = conn
+	if PrintTunnelData {
+		logrus.Debugf("CONNECTIONS %d %d", s.sessionKey, len(s.conns))
+	}
+}
+
+// removeConnection safely removes a connection by ID, returning the connection object
+func (s *Session) removeConnection(connID int64) *connection {
+	s.Lock()
+	defer s.Unlock()
+
+	conn := s.conns[connID]
+	delete(s.conns, connID)
+	if PrintTunnelData {
+		defer logrus.Debugf("CONNECTIONS %d %d", s.sessionKey, len(s.conns))
+	}
+	return conn
+}
+
+// getConnection retrieves a connection by ID
+func (s *Session) getConnection(connID int64) *connection {
+	s.RLock()
+	defer s.RUnlock()
+
 	return s.conns[connID]
+}
+
+// addSessionKey registers a new session key for a given client key
+func (s *Session) addSessionKey(clientKey string, sessionKey int) {
+	s.Lock()
+	defer s.Unlock()
+
+	keys := s.remoteClientKeys[clientKey]
+	if keys == nil {
+		keys = map[int]bool{}
+		s.remoteClientKeys[clientKey] = keys
+	}
+	keys[sessionKey] = true
+}
+
+// removeSessionKey removes a specific session key for a client key
+func (s *Session) removeSessionKey(clientKey string, sessionKey int) {
+	s.Lock()
+	defer s.Unlock()
+
+	keys := s.remoteClientKeys[clientKey]
+	delete(keys, sessionKey)
+	if len(keys) == 0 {
+		delete(s.remoteClientKeys, clientKey)
+	}
+}
+
+// getSessionKeys retrieves all session keys for a given client key
+func (s *Session) getSessionKeys(clientKey string) map[int]bool {
+	s.Lock()
+	defer s.Unlock()
+	return s.remoteClientKeys[clientKey]
 }
 
 func (s *Session) startPings(rootCtx context.Context) {
@@ -183,12 +241,7 @@ func (s *Session) serverConnect(deadline time.Time, proto, address string) (net.
 	connID := atomic.AddInt64(&s.nextConnID, 1)
 	conn := newConnection(connID, s, proto, address)
 
-	s.Lock()
-	s.conns[connID] = conn
-	if PrintTunnelData {
-		logrus.Debugf("CONNECTIONS %d %d", s.sessionKey, len(s.conns))
-	}
-	s.Unlock()
+	s.addConnection(connID, conn)
 
 	_, err := s.writeMessage(deadline, newConnect(connID, proto, address))
 	if err != nil {

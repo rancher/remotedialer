@@ -77,9 +77,7 @@ func (sm *sessionManager) getDialer(clientKey string) (Dialer, error) {
 
 	for _, sessions := range sm.peers {
 		for _, session := range sessions {
-			session.Lock()
-			keys := session.remoteClientKeys[clientKey]
-			session.Unlock()
+			keys := session.getSessionKeys(clientKey)
 			if len(keys) > 0 {
 				return toDialer(session, clientKey), nil
 			}

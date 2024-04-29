@@ -46,13 +46,7 @@ func (s *Session) clientConnect(ctx context.Context, message *message) error {
 	}
 
 	conn := newConnection(message.connID, s, message.proto, message.address)
-
-	s.Lock()
-	s.conns[message.connID] = conn
-	if PrintTunnelData {
-		logrus.Debugf("CONNECTIONS %d %d", s.sessionKey, len(s.conns))
-	}
-	s.Unlock()
+	s.addConnection(message.connID, conn)
 
 	go clientDial(ctx, s.dialer, conn, message)
 
@@ -61,9 +55,6 @@ func (s *Session) clientConnect(ctx context.Context, message *message) error {
 
 // / addRemoteClient registers a new remote client, making it accessible for requests
 func (s *Session) addRemoteClient(address string) error {
-	s.Lock()
-	defer s.Unlock()
-
 	if s.remoteClientKeys == nil {
 		return nil
 	}
@@ -72,13 +63,7 @@ func (s *Session) addRemoteClient(address string) error {
 	if err != nil {
 		return fmt.Errorf("invalid remote Session %s: %v", address, err)
 	}
-
-	keys := s.remoteClientKeys[clientKey]
-	if keys == nil {
-		keys = map[int]bool{}
-		s.remoteClientKeys[clientKey] = keys
-	}
-	keys[sessionKey] = true
+	s.addSessionKey(clientKey, sessionKey)
 
 	if PrintTunnelData {
 		logrus.Debugf("ADD REMOTE CLIENT %s, SESSION %d", address, s.sessionKey)
@@ -89,19 +74,11 @@ func (s *Session) addRemoteClient(address string) error {
 
 // / addRemoteClient removes a given client from a session
 func (s *Session) removeRemoteClient(address string) error {
-	s.Lock()
-	defer s.Unlock()
-
 	clientKey, sessionKey, err := parseAddress(address)
 	if err != nil {
 		return fmt.Errorf("invalid remote Session %s: %v", address, err)
 	}
-
-	keys := s.remoteClientKeys[clientKey]
-	delete(keys, sessionKey)
-	if len(keys) == 0 {
-		delete(s.remoteClientKeys, clientKey)
-	}
+	s.removeSessionKey(clientKey, sessionKey)
 
 	if PrintTunnelData {
 		logrus.Debugf("REMOVE REMOTE CLIENT %s, SESSION %d", address, s.sessionKey)
@@ -113,15 +90,7 @@ func (s *Session) removeRemoteClient(address string) error {
 // closeConnection removes a connection for a given ID from the session, sending an error message to communicate the closing to the other end.
 // If an error is not provided, io.EOF will be used instead.
 func (s *Session) closeConnection(connID int64, err error) {
-	s.Lock()
-	conn := s.conns[connID]
-	delete(s.conns, connID)
-	if PrintTunnelData {
-		logrus.Debugf("CONNECTIONS %d %d", s.sessionKey, len(s.conns))
-	}
-	s.Unlock()
-
-	if conn != nil {
+	if conn := s.removeConnection(connID); conn != nil {
 		conn.tunnelClose(err)
 	}
 }
