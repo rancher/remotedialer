@@ -126,8 +126,8 @@ func (s *Session) removeSessionKey(clientKey string, sessionKey int) {
 
 // getSessionKeys retrieves all session keys for a given client key
 func (s *Session) getSessionKeys(clientKey string) map[int]bool {
-	s.Lock()
-	defer s.Unlock()
+	s.RLock()
+	defer s.RUnlock()
 	return s.remoteClientKeys[clientKey]
 }
 
