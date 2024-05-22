@@ -22,7 +22,7 @@ type Session struct {
 	nextConnID       int64
 	clientKey        string
 	sessionKey       int64
-	conn             *wsConn
+	conn             wsConn
 	conns            map[int64]*connection
 	remoteClientKeys map[string]map[int]bool
 	auth             ConnectAuthorizer
@@ -56,12 +56,12 @@ func NewClientSessionWithDialer(auth ConnectAuthorizer, conn *websocket.Conn, di
 	}
 }
 
-func newSession(sessionKey int64, clientKey string, conn *websocket.Conn) *Session {
+func newSession(sessionKey int64, clientKey string, conn wsConn) *Session {
 	return &Session{
 		nextConnID:       1,
 		clientKey:        clientKey,
 		sessionKey:       sessionKey,
-		conn:             newWSConn(conn),
+		conn:             conn,
 		conns:            map[int64]*connection{},
 		remoteClientKeys: map[string]map[int]bool{},
 	}
@@ -147,12 +147,10 @@ func (s *Session) startPings(rootCtx context.Context) {
 			case <-ctx.Done():
 				return
 			case <-t.C:
-				s.conn.Lock()
-				if err := s.conn.conn.WriteControl(websocket.PingMessage, []byte(""), time.Now().Add(PingWaitDuration)); err != nil {
+				if err := s.conn.WriteControl(websocket.PingMessage, time.Now().Add(PingWaitDuration), []byte("")); err != nil {
 					logrus.WithError(err).Error("Error writing ping")
 				}
 				logrus.Debug("Wrote ping")
-				s.conn.Unlock()
 			}
 		}
 	}()
@@ -276,7 +274,7 @@ func (s *Session) sessionAdded(clientKey string, sessionKey int64) {
 	client := fmt.Sprintf("%s/%d", clientKey, sessionKey)
 	_, err := s.writeMessage(time.Time{}, newAddClient(client))
 	if err != nil {
-		s.conn.conn.Close()
+		s.conn.Close()
 	}
 }
 
@@ -284,6 +282,6 @@ func (s *Session) sessionRemoved(clientKey string, sessionKey int64) {
 	client := fmt.Sprintf("%s/%d", clientKey, sessionKey)
 	_, err := s.writeMessage(time.Time{}, newRemoveClient(client))
 	if err != nil {
-		s.conn.conn.Close()
+		s.conn.Close()
 	}
 }

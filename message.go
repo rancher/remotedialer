@@ -220,7 +220,7 @@ func (m *message) Read(p []byte) (int, error) {
 	return m.body.Read(p)
 }
 
-func (m *message) WriteTo(deadline time.Time, wsConn *wsConn) (int, error) {
+func (m *message) WriteTo(deadline time.Time, wsConn wsConn) (int, error) {
 	err := wsConn.WriteMessage(websocket.BinaryMessage, deadline, m.Bytes())
 	return len(m.bytes), err
 }

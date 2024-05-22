@@ -89,7 +89,7 @@ func (sm *sessionManager) getDialer(clientKey string) (Dialer, error) {
 
 func (sm *sessionManager) add(clientKey string, conn *websocket.Conn, peer bool) *Session {
 	sessionKey := rand.Int63()
-	session := newSession(sessionKey, clientKey, conn)
+	session := newSession(sessionKey, clientKey, newWSConn(conn))
 
 	sm.Lock()
 	defer sm.Unlock()
