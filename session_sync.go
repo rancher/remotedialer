@@ -49,7 +49,7 @@ func (s *Session) sendSyncConnections() error {
 // The session lock must be hold by the caller when calling this method
 func (s *Session) closeStaleConnections(clientIDs []int64) {
 	serverIDs := s.activeConnectionIDs()
-	toClose := removedFromSlice(serverIDs, clientIDs)
+	toClose := diffSortedSetsGetRemoved(serverIDs, clientIDs)
 	if len(toClose) == 0 {
 		return
 	}
@@ -66,9 +66,9 @@ func (s *Session) closeStaleConnections(clientIDs []int64) {
 	}
 }
 
-// removedFromSlice compares two sorted slices and returns those items present in a that are not present in b
+// diffSortedSetsGetRemoved compares two sorted slices and returns those items present in a that are not present in b
 // similar to coreutil's "comm -23"
-func removedFromSlice(a, b []int64) (res []int64) {
+func diffSortedSetsGetRemoved(a, b []int64) (res []int64) {
 	var i, j int
 	for i < len(a) && j < len(b) {
 		if a[i] < b[j] { // present in "a", not in "b"
