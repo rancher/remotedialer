@@ -109,7 +109,10 @@ func TestSession_closeConnection(t *testing.T) {
 	s := setupDummySession(t, 0)
 	var msg *message
 	s.conn = &fakeWSConn{
-		writeMessageCallback: func(msgType int, _ time.Time, data []byte) (err error) {
+		writeMessageCallback: func(msgType int, deadline time.Time, data []byte) (err error) {
+			if !deadline.IsZero() && deadline.Before(time.Now()) {
+				return errors.New("deadline exceeded")
+			}
 			msg, err = newServerMessage(bytes.NewReader(data))
 			return
 		},
@@ -118,13 +121,16 @@ func TestSession_closeConnection(t *testing.T) {
 	conn := newConnection(connID, s, "test", "test")
 	s.addConnection(connID, conn)
 
+	// Ensure Error message is sent regardless of the WriteDeadline value, see https://github.com/rancher/remotedialer/pull/79
+	_ = conn.SetWriteDeadline(time.Now())
+
 	expectedErr := errors.New("connection closed")
 	s.closeConnection(connID, expectedErr)
 
 	if s.getConnection(connID) != nil {
 		t.Errorf("connection was not closed correctly")
 	}
-	if conn.err == nil {
+	if conn.err == nil || msg == nil {
 		t.Fatal("message not sent on closed connection")
 	} else if msg.messageType != Error {
 		t.Errorf("incorrect message type sent")
