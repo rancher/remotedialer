@@ -100,7 +100,7 @@ func (s *Session) syncConnections(r io.Reader) error {
 		return fmt.Errorf("decoding sync connections payload: %w", err)
 	}
 
-	s.closeStaleConnections(clientActiveConnections)
+	s.compareAndCloseStaleConnections(clientActiveConnections)
 	return nil
 }
 

@@ -45,9 +45,8 @@ func (s *Session) sendSyncConnections() error {
 	return err
 }
 
-// closeMissingConnections closes any session connection that is not present in the IDs received from the client
-// The session lock must be hold by the caller when calling this method
-func (s *Session) closeStaleConnections(clientIDs []int64) {
+// compareAndCloseStaleConnections compares the Session's activeConnectionIDs with the provided list from the client, then closing every connection not present in it
+func (s *Session) compareAndCloseStaleConnections(clientIDs []int64) {
 	serverIDs := s.activeConnectionIDs()
 	toClose := diffSortedSetsGetRemoved(serverIDs, clientIDs)
 	if len(toClose) == 0 {
