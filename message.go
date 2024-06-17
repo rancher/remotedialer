@@ -33,7 +33,7 @@ const (
 	// Resume is a message type used to resume a paused connection
 	Resume
 	// SyncConnections is a message type used to communicate active connection IDs.
-	// The received can consider any ID not present in this message as stale and free any associated resource.
+	// The receiver can consider any ID not present in this message as stale and free any associated resource.
 	SyncConnections
 )
 
