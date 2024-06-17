@@ -67,7 +67,8 @@ func (s *Session) compareAndCloseStaleConnections(clientIDs []int64) {
 
 // diffSortedSetsGetRemoved compares two sorted slices and returns those items present in a that are not present in b
 // similar to coreutil's "comm -23"
-func diffSortedSetsGetRemoved(a, b []int64) (res []int64) {
+func diffSortedSetsGetRemoved(a, b []int64) []int64 {
+	var res []int64
 	var i, j int
 	for i < len(a) && j < len(b) {
 		if a[i] < b[j] { // present in "a", not in "b"
@@ -81,5 +82,5 @@ func diffSortedSetsGetRemoved(a, b []int64) (res []int64) {
 		}
 	}
 	res = append(res, a[i:]...) // any remainders in "a" are also removed from "b"
-	return
+	return res
 }
