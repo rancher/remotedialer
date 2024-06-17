@@ -44,12 +44,42 @@ func Test_encodeConnectionIDs(t *testing.T) {
 }
 
 func Test_diffSortedSetsGetRemoved(t *testing.T) {
-	server := []int64{3, 5, 20, 50, 100}
-	client := []int64{3, 50, 100, 200}
-	expected := []int64{5, 20}
-
-	if got, want := diffSortedSetsGetRemoved(server, client), expected; !reflect.DeepEqual(got, want) {
-		t.Errorf("unexpected result, got: %v, want: %v", got, want)
+	t.Parallel()
+	tests := []struct {
+		server, client, expected []int64
+	}{
+		{
+			// same ids
+			server:   []int64{2, 4, 6},
+			client:   []int64{2, 4, 6},
+			expected: nil,
+		},
+		{
+			// Client keeps all ids from the server, additional ids are okay
+			server:   []int64{1, 2, 3},
+			client:   []int64{1, 2, 3, 4, 5},
+			expected: nil,
+		},
+		{
+			// Client closed some ids kept by the server
+			server:   []int64{1, 2, 3, 4, 5},
+			client:   []int64{1, 2, 3},
+			expected: []int64{4, 5},
+		},
+		{
+			// Combined case
+			server:   []int64{1, 2, 3, 4, 5},
+			client:   []int64{3, 6},
+			expected: []int64{1, 2, 4, 5},
+		},
+	}
+	for x, tt := range tests {
+		t.Run(fmt.Sprintf("case_%d", x), func(t *testing.T) {
+			t.Parallel()
+			if got, want := diffSortedSetsGetRemoved(tt.server, tt.client), tt.expected; !reflect.DeepEqual(got, want) {
+				t.Errorf("unexpected result, got: %v, want: %v", got, want)
+			}
+		})
 	}
 }
 
