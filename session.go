@@ -84,15 +84,16 @@ func (s *Session) removeConnection(connID int64) *connection {
 	s.Lock()
 	defer s.Unlock()
 
-	conn := s.lockedRemoveConnection(connID)
+	conn := s.removeConnectionLocked(connID)
 	if PrintTunnelData {
 		defer logrus.Debugf("CONNECTIONS %d %d", s.sessionKey, len(s.conns))
 	}
 	return conn
 }
 
-// lockedRemoveConnection removes a given connection from the session. The session lock must be held by the caller when calling this method
-func (s *Session) lockedRemoveConnection(connID int64) *connection {
+// removeConnectionLocked removes a given connection from the session.
+// The session lock must be held by the caller when calling this method
+func (s *Session) removeConnectionLocked(connID int64) *connection {
 	conn := s.conns[connID]
 	delete(s.conns, connID)
 	return conn

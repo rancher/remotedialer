@@ -58,7 +58,7 @@ func (s *Session) closeStaleConnections(clientIDs []int64) {
 	defer s.Unlock()
 	for _, id := range toClose {
 		// Connection no longer active in the client, close it server-side
-		conn := s.lockedRemoveConnection(id)
+		conn := s.removeConnectionLocked(id)
 		if conn != nil {
 			// Using doTunnelClose directly instead of tunnelClose, omitting unnecessarily sending an Error message
 			conn.doTunnelClose(errCloseSyncConnections)
