@@ -16,6 +16,7 @@ import (
 )
 
 func Test_encodeConnectionIDs(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		size int
 	}{
@@ -28,6 +29,7 @@ func Test_encodeConnectionIDs(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(fmt.Sprintf("%d_ids", tt.size), func(t *testing.T) {
+			t.Parallel()
 			ids := generateIDs(tt.size)
 			encoded := encodeConnectionIDs(ids)
 			decoded, err := decodeConnectionIDs(encoded)
@@ -52,6 +54,8 @@ func Test_diffSortedSetsGetRemoved(t *testing.T) {
 }
 
 func TestSession_sendSyncConnections(t *testing.T) {
+	t.Parallel()
+
 	data := make(chan []byte)
 	conn := testServerWS(t, data)
 	session := newSession(rand.Int63(), "sync-test", newWSConn(conn))

@@ -42,6 +42,8 @@ func setupDummySession(t *testing.T, nConnections int) *Session {
 }
 
 func TestSession_connections(t *testing.T) {
+	t.Parallel()
+
 	const n = 10
 	s := setupDummySession(t, n)
 
@@ -59,6 +61,8 @@ func TestSession_connections(t *testing.T) {
 }
 
 func TestSession_sessionKeys(t *testing.T) {
+	t.Parallel()
+
 	s := setupDummySession(t, 0)
 
 	clientKey, sessionKey := "testkey", rand.Int()
@@ -78,6 +82,7 @@ func TestSession_sessionKeys(t *testing.T) {
 }
 
 func TestSession_activeConnectionIDs(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name     string
 		conns    map[int64]*connection
@@ -107,6 +112,7 @@ func TestSession_activeConnectionIDs(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			session := Session{conns: tt.conns}
 			if got, want := session.activeConnectionIDs(), tt.expected; !reflect.DeepEqual(got, want) {
 				t.Errorf("incorrect result, got: %v, want: %v", got, want)
@@ -116,6 +122,8 @@ func TestSession_activeConnectionIDs(t *testing.T) {
 }
 
 func TestSession_sendPings(t *testing.T) {
+	t.Parallel()
+
 	conn := testServerWS(t, nil)
 	session := newSession(rand.Int63(), "pings-test", newWSConn(conn))
 
