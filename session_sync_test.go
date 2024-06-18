@@ -27,7 +27,8 @@ func Test_encodeConnectionIDs(t *testing.T) {
 		{100},
 		{1000},
 	}
-	for _, tt := range tests {
+	for x := range tests {
+		tt := tests[x]
 		t.Run(fmt.Sprintf("%d_ids", tt.size), func(t *testing.T) {
 			t.Parallel()
 			ids := generateIDs(tt.size)
@@ -73,7 +74,8 @@ func Test_diffSortedSetsGetRemoved(t *testing.T) {
 			expected: []int64{1, 2, 4, 5},
 		},
 	}
-	for x, tt := range tests {
+	for x := range tests {
+		tt := tests[x]
 		t.Run(fmt.Sprintf("case_%d", x), func(t *testing.T) {
 			t.Parallel()
 			if got, want := diffSortedSetsGetRemoved(tt.server, tt.client), tt.expected; !reflect.DeepEqual(got, want) {

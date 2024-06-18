@@ -110,7 +110,8 @@ func TestSession_activeConnectionIDs(t *testing.T) {
 			expected: []int64{3, 5, 20},
 		},
 	}
-	for _, tt := range tests {
+	for x := range tests {
+		tt := tests[x]
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			session := Session{conns: tt.conns}
