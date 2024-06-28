@@ -36,7 +36,6 @@ func newConnection(connID int64, session *Session, proto, address string) *conne
 }
 
 func (c *connection) tunnelClose(err error) {
-	metrics.IncSMTotalRemoveConnectionsForWS(c.session.clientKey, c.addr.Network(), c.addr.String())
 	c.writeErr(err)
 	c.doTunnelClose(err)
 }
@@ -46,6 +45,7 @@ func (c *connection) doTunnelClose(err error) {
 		return
 	}
 
+	metrics.IncSMTotalRemoveConnectionsForWS(c.session.clientKey, c.addr.Network(), c.addr.String())
 	c.err = err
 	if c.err == nil {
 		c.err = io.ErrClosedPipe

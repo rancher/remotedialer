@@ -27,6 +27,8 @@ func (s *Session) serveMessage(ctx context.Context, reader io.Reader) error {
 		return s.addRemoteClient(message.address)
 	case RemoveClient:
 		return s.removeRemoteClient(message.address)
+	case SyncConnections:
+		return s.syncConnections(message.body)
 	case Data:
 		s.connectionData(message.connID, message.body)
 	case Pause:
@@ -84,6 +86,21 @@ func (s *Session) removeRemoteClient(address string) error {
 		logrus.Debugf("REMOVE REMOTE CLIENT %s, SESSION %d", address, s.sessionKey)
 	}
 
+	return nil
+}
+
+// syncConnections closes any session connection that is not present in the IDs received from the client
+func (s *Session) syncConnections(r io.Reader) error {
+	payload, err := io.ReadAll(r)
+	if err != nil {
+		return fmt.Errorf("reading message body: %w", err)
+	}
+	clientActiveConnections, err := decodeConnectionIDs(payload)
+	if err != nil {
+		return fmt.Errorf("decoding sync connections payload: %w", err)
+	}
+
+	s.compareAndCloseStaleConnections(clientActiveConnections)
 	return nil
 }
 
