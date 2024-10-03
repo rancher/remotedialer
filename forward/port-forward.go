@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"math/rand"
 	"net/http"
@@ -24,8 +25,9 @@ type PortForward struct {
 	Namespace     string
 	LabelSelector string
 	Ports         []string
+	readyCh       chan struct{}
 	stopCh        chan struct{}
-	started       bool
+	cancel        context.CancelFunc
 }
 
 // New initializes and returns a PortForward value after validating the incoming parameters.
@@ -51,6 +53,7 @@ func New(restConfig *rest.Config, podClient corev1.PodInterface, namespace strin
 		Namespace:     namespace,
 		LabelSelector: labelSelector,
 		Ports:         ports,
+		readyCh:       make(chan struct{}, 1),
 		stopCh:        make(chan struct{}, 1),
 	}, nil
 }
@@ -58,39 +61,44 @@ func New(restConfig *rest.Config, podClient corev1.PodInterface, namespace strin
 // Stop releases the resources of the running port-forwarder.
 // If the port forwarder is not already running, this method is a no-op.
 func (r *PortForward) Stop() {
-	if r.started {
-		r.started = false
-		r.stopCh <- struct{}{}
-	}
+	r.cancel()
+	r.stopCh <- struct{}{}
 }
 
-// Start waits for a port forwarder to start in the background.
-// It returns an error in case the forwarder failed to start.
-func (r *PortForward) Start() error {
-	if r.started {
-		return fmt.Errorf("port-forward is already running")
-	}
-	errCh := make(chan error, 1)
-	readyCh := make(chan struct{}, 1)
+// Start launches a port forwarder to start in the background.
+func (r *PortForward) Start() {
+	ctx, cancel := context.WithCancel(context.Background())
+	r.cancel = cancel
 
-	go r.runForwarder(readyCh, r.stopCh, errCh, r.Ports)
-	select {
-	case err := <-errCh:
-		return fmt.Errorf("error setting up port forwarding: %w", err)
-	case <-readyCh:
-		logrus.Info("port forwarding ready")
-		r.started = true
-		return nil
-	}
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				logrus.Infoln("Goroutine stopped.")
+				return
+			default:
+				r.readyCh = make(chan struct{}, 1)
+				err := r.runForwarder(r.readyCh, r.stopCh, r.Ports)
+				if err != nil {
+					if errors.Is(err, portforward.ErrLostConnectionToPod) {
+						logrus.Error("Lost connection to pod; restarting.")
+						time.Sleep(time.Second)
+						continue
+					} else {
+						logrus.Errorf("Non-restartable error: %v", err)
+						return
+					}
+				}
+			}
+		}
+	}()
 }
 
 // runForwarder starts a port forwarder and blocks until it is stopped when it receives a value on the stopCh.
-// This method is meant to be called asynchronously.
-func (r *PortForward) runForwarder(readyCh chan struct{}, stopCh chan struct{}, errCh chan error, ports []string) {
+func (r *PortForward) runForwarder(readyCh, stopCh chan struct{}, ports []string) error {
 	podName, err := r.podName()
 	if err != nil {
-		errCh <- err
-		return
+		return err
 	}
 	path := fmt.Sprintf("/api/v1/namespaces/%s/pods/%s/portforward", r.Namespace, podName)
 	hostIP := strings.TrimPrefix(r.restConfig.Host, "https://")
@@ -101,8 +109,7 @@ func (r *PortForward) runForwarder(readyCh chan struct{}, stopCh chan struct{}, 
 	}
 	roundTripper, upgrader, err := spdy.RoundTripperFor(r.restConfig)
 	if err != nil {
-		errCh <- err
-		return
+		return err
 	}
 	dialer := spdy.NewDialer(upgrader, &http.Client{
 		Transport: roundTripper,
@@ -111,8 +118,7 @@ func (r *PortForward) runForwarder(readyCh chan struct{}, stopCh chan struct{}, 
 	stdout, stderr := new(bytes.Buffer), new(bytes.Buffer)
 	forwarder, err := portforward.New(dialer, ports, stopCh, readyCh, stdout, stderr)
 	if err != nil {
-		errCh <- err
-		return
+		return err
 	}
 
 	go func() {
@@ -126,11 +132,7 @@ func (r *PortForward) runForwarder(readyCh chan struct{}, stopCh chan struct{}, 
 		}
 	}()
 
-	if err := forwarder.ForwardPorts(); err != nil {
-		errCh <- err
-		return
-	}
-	fmt.Println("forwarder done")
+	return forwarder.ForwardPorts()
 }
 
 // podName tries to select a random pod and return its name from the pods that the
