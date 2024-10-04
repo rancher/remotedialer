@@ -59,13 +59,12 @@ func New(restConfig *rest.Config, podClient corev1.PodInterface, namespace strin
 }
 
 // Stop releases the resources of the running port-forwarder.
-// If the port forwarder is not already running, this method is a no-op.
 func (r *PortForward) Stop() {
 	r.cancel()
 	r.stopCh <- struct{}{}
 }
 
-// Start launches a port forwarder to start in the background.
+// Start launches a port forwarder in the background.
 func (r *PortForward) Start() {
 	ctx, cancel := context.WithCancel(context.Background())
 	r.cancel = cancel
@@ -92,6 +91,7 @@ func (r *PortForward) Start() {
 			}
 		}
 	}()
+	// TODO: maybe block until port forwarding is ready.
 }
 
 // runForwarder starts a port forwarder and blocks until it is stopped when it receives a value on the stopCh.
