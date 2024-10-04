@@ -1,4 +1,13 @@
-FROM ubuntu:latest
-LABEL authors="maxsokolovsky"
+FROM golang:1.23 AS builder
+WORKDIR /app
 
-ENTRYPOINT ["top", "-b"]
+COPY go.mod .
+COPY go.sum .
+RUN go mod download
+
+COPY . .
+RUN CGO_ENABLED=0 go build -o proxy ./proxy
+
+FROM scratch
+COPY --from=builder /app/proxy .
+CMD ["./proxy"]
