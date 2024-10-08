@@ -1,4 +1,4 @@
-package main
+package proxy
 
 import (
 	"context"
@@ -7,7 +7,6 @@ import (
 	"math/rand"
 	"net"
 	"net/http"
-	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/rancher/dynamiclistener"
@@ -17,17 +16,8 @@ import (
 	"github.com/rancher/remotedialer"
 )
 
-const (
-	namespace  = "cattle-system"
-	tlsName    = "apiserver-poc.default.svc"
-	certName   = "cattle-apiextension-tls"
-	caName     = "cattle-apiextension-ca"
-	tcpPort    = 6666
-	extAPIPort = 3333
-)
-
-func runProxyListener(ctx context.Context, server *remotedialer.Server) error {
-	l, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%d", tcpPort)) //this RDP app starts only once and always running
+func runProxyListener(ctx context.Context, cfg *Config, server *remotedialer.Server) error {
+	l, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%d", cfg.ProxyPort)) //this RDP app starts only once and always running
 	if err != nil {
 		return err
 	}
@@ -46,13 +36,13 @@ func runProxyListener(ctx context.Context, server *remotedialer.Server) error {
 				clients := server.ListClients()
 				if len(clients) == 0 {
 					logrus.Info("proxy TCP connection failed: no clients")
-					time.Sleep(time.Second)
-					continue
+					conn.Close()
+					return
 				}
 				client = clients[rand.Intn(len(clients))]
 			}
 
-			peerAddr := fmt.Sprintf(":%d", extAPIPort) // rancher's special https server for imperative API
+			peerAddr := fmt.Sprintf(":%d", cfg.PeerPort) // rancher's special https server for imperative API
 			clientConn, err := server.Dialer(client)(ctx, "tcp", peerAddr)
 			if err != nil {
 				logrus.Errorf("proxy dialing %s failed: %v", peerAddr, err)
@@ -86,12 +76,12 @@ func pipe(a, b net.Conn) {
 	logrus.Debugf("proxy copied %d bytes to %v from %v", n, a.LocalAddr(), b.LocalAddr())
 }
 
-func main() {
+func Start(cfg *Config) error {
 	logrus.SetLevel(logrus.DebugLevel)
 	ctx := context.Background()
 	router := mux.NewRouter()
 	authorizer := func(req *http.Request) (string, bool, error) {
-		// TODO: Actually do authorization here with a shared Secret
+		// TODO: Actually do authorization here with a shared Secret, compare
 		id := req.Header.Get("X-Tunnel-ID")
 		if id == "" {
 			return "", false, fmt.Errorf("X-Tunnel-ID not specified in request header")
@@ -106,27 +96,28 @@ func main() {
 	}))
 
 	go func() {
-		if err := runProxyListener(ctx, remoteDialerServer); err != nil {
-			logrus.Fatalf("proxy listener failed to start in the background: %v", err)
+		if err := runProxyListener(ctx, cfg, remoteDialerServer); err != nil {
+			logrus.Errorf("proxy listener failed to start in the background: %v", err)
 		}
 	}()
 
 	// the secret will be created in the cluster.
 	// only started once, always running, RDP pod, this app
-	if err := server.ListenAndServe(ctx, 0, 5555, router, &server.ListenOpts{
+	if err := server.ListenAndServe(ctx, cfg.HTTPSPort, 0, router, &server.ListenOpts{
 		//Secrets:       wContext.Core.Secret(),
-		CAName:        caName,
-		CANamespace:   namespace,
-		CertName:      certName,
-		CertNamespace: namespace,
+		CAName:        cfg.CAName,
+		CANamespace:   cfg.Namespace,
+		CertName:      cfg.CertCAName,
+		CertNamespace: cfg.CertCANamespace,
 		TLSListenerConfig: dynamiclistener.Config{
-			SANs: []string{tlsName},
+			SANs: []string{cfg.TLSName},
 			FilterCN: func(cns ...string) []string {
-				return []string{tlsName}
+				return []string{cfg.TLSName}
 			},
 		},
 	}); err != nil {
-		logrus.Errorf("extension server exited with an error: %v", err)
+		return fmt.Errorf("extension server exited with an error: %w", err)
 	}
 	<-ctx.Done()
+	return nil
 }
