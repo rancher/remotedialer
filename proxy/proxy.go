@@ -31,17 +31,13 @@ func runProxyListener(ctx context.Context, cfg *Config, server *remotedialer.Ser
 		}
 
 		go func() {
-			var client string
-			for client == "" {
-				clients := server.ListClients()
-				if len(clients) == 0 {
-					logrus.Info("proxy TCP connection failed: no clients")
-					conn.Close()
-					return
-				}
-				client = clients[rand.Intn(len(clients))]
+			clients := server.ListClients()
+			if len(clients) == 0 {
+				logrus.Info("proxy TCP connection failed: no clients")
+				conn.Close()
+				return
 			}
-
+			client := clients[rand.Intn(len(clients))]
 			peerAddr := fmt.Sprintf(":%d", cfg.PeerPort) // rancher's special https server for imperative API
 			clientConn, err := server.Dialer(client)(ctx, "tcp", peerAddr)
 			if err != nil {
@@ -53,7 +49,6 @@ func runProxyListener(ctx context.Context, cfg *Config, server *remotedialer.Ser
 			go pipe(conn, clientConn)
 			go pipe(clientConn, conn)
 		}()
-
 	}
 }
 

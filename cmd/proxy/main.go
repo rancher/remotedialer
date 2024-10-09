@@ -9,7 +9,7 @@ import (
 func main() {
 	cfg, err := proxy.ConfigFromEnvironment()
 	if err != nil {
-		logrus.Fatal(err)
+		logrus.Fatalf("fatal configuration error: %v", err)
 	}
 	err = proxy.Start(cfg)
 	if err != nil {
