@@ -50,7 +50,7 @@ func New(restConfig *rest.Config, podClient v1.PodController, namespace string, 
 
 	for _, p := range ports {
 		if strings.HasPrefix(p, "0:") {
-			return nil, fmt.Errorf("cannot bind port zero", p)
+			return nil, fmt.Errorf("cannot bind port zero")
 		}
 	}
 
