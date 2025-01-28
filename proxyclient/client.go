@@ -61,6 +61,10 @@ func New(serverSharedSecret, namespace, certSecretName, certServerName string, r
 		return nil, fmt.Errorf("certSecretName required")
 	}
 
+	if serverSharedSecret == "" {
+		return nil, fmt.Errorf("server shared secret must be provided")
+	}
+
 	serverUrl := fmt.Sprintf("%s:%d%s", defaultServerAddr, defaultServerPort, defaultServerPath)
 	dialer, err := buildDialer(namespace, certSecretName, certServerName, restConfig)
 	if err != nil {
@@ -111,40 +115,41 @@ func buildDialer(namespace, certSecretName, certServerName string, restConfig *r
 	}, nil
 }
 
-func (c *ProxyClient) Start(ctx context.Context) error {
-	if err := c.forwarder.Start(); err != nil {
-		return err
-	}
+func (c *ProxyClient) Run(ctx context.Context) {
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				logrus.Infof("ProxyClient: ClientConnect finished. If no error, the session closed cleanly.")
+				return
 
-	defer c.forwarder.Stop()
+			default:
+				if err := c.forwarder.Start(); err != nil {
+					logrus.Errorf("remotedialer.ProxyClient error: %s ", err)
+				}
 
-	logrus.Infof("ProxyClient connecting to %s", c.serverUrl)
+				logrus.Infof("ProxyClient connecting to %s", c.serverUrl)
 
-	headers := http.Header{}
-	if c.serverConnectSecret == "" {
-		return fmt.Errorf("server shared secret must be provided")
-	}
+				headers := http.Header{}
+				headers.Set("X-API-Tunnel-Secret", c.serverConnectSecret)
 
-	headers.Set("X-API-Tunnel-Secret", c.serverConnectSecret)
+				onConnectAuth := func(proto, address string) bool { return true }
+				onConnect := func(sessionCtx context.Context, session *remotedialer.Session) error {
+					logrus.Infoln("ProxyClient: remotedialer session connected!")
+					if c.onConnect != nil {
+						return c.onConnect(sessionCtx, session)
+					}
+					return nil
+				}
 
-	authFn := func(proto, address string) bool {
-		return true
-	}
-
-	onConnect := func(sessionCtx context.Context, session *remotedialer.Session) error {
-		logrus.Infoln("ProxyClient: remotedialer session connected!")
-		if c.onConnect != nil {
-			return c.onConnect(sessionCtx, session)
+				if err := remotedialer.ClientConnect(ctx, c.serverUrl, headers, c.dialer, onConnectAuth, onConnect); err != nil {
+					logrus.Errorf("remotedialer.ClientConnect error: %w", err)
+				}
+			}
 		}
-		return nil
-	}
+	}()
 
-	if err := remotedialer.ClientConnect(ctx, c.serverUrl, headers, c.dialer, authFn, onConnect); err != nil {
-		return fmt.Errorf("remotedialer.ClientConnect error: %w", err)
-	}
-
-	logrus.Infof("ProxyClient: ClientConnect finished. If no error, the session closed cleanly.")
-	return nil
+	<-ctx.Done()
 }
 
 func (c *ProxyClient) Stop() {

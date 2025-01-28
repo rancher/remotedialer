@@ -186,7 +186,5 @@ func main() {
 		proxyClient.Stop()
 	}()
 
-	if err := proxyClient.Start(ctx); err != nil {
-		logrus.Fatal(err)
-	}
+	proxyClient.Run(ctx)
 }
