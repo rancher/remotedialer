@@ -143,7 +143,7 @@ func (c *ProxyClient) Run(ctx context.Context) {
 				}
 
 				if err := remotedialer.ClientConnect(ctx, c.serverUrl, headers, c.dialer, onConnectAuth, onConnect); err != nil {
-					logrus.Errorf("remotedialer.ClientConnect error: %w", err)
+					logrus.Errorf("remotedialer.ClientConnect error: %s", err.Error())
 				}
 			}
 		}
