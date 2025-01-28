@@ -6,6 +6,7 @@ import (
 	"crypto/x509"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/gorilla/websocket"
 	"github.com/rancher/remotedialer"
@@ -25,6 +26,7 @@ var (
 	nonTLSDialer = &websocket.Dialer{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 	}
+	retryTimeout = 1 * time.Second
 )
 
 type PortForwarder interface {
@@ -126,6 +128,8 @@ func (c *ProxyClient) Run(ctx context.Context) {
 			default:
 				if err := c.forwarder.Start(); err != nil {
 					logrus.Errorf("remotedialer.ProxyClient error: %s ", err)
+					time.Sleep(retryTimeout)
+					continue
 				}
 
 				logrus.Infof("ProxyClient connecting to %s", c.serverUrl)
@@ -144,6 +148,7 @@ func (c *ProxyClient) Run(ctx context.Context) {
 
 				if err := remotedialer.ClientConnect(ctx, c.serverUrl, headers, c.dialer, onConnectAuth, onConnect); err != nil {
 					logrus.Errorf("remotedialer.ClientConnect error: %s", err.Error())
+					time.Sleep(retryTimeout)
 				}
 			}
 		}
