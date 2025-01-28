@@ -12,6 +12,7 @@ import (
 	"github.com/rancher/dynamiclistener"
 	"github.com/rancher/dynamiclistener/server"
 	"github.com/sirupsen/logrus"
+	"k8s.io/client-go/rest"
 
 	"github.com/rancher/remotedialer"
 )
@@ -71,22 +72,25 @@ func pipe(a, b net.Conn) {
 	logrus.Debugf("proxy copied %d bytes to %v from %v", n, a.LocalAddr(), b.LocalAddr())
 }
 
-func Start(cfg *Config) error {
+func Start(cfg *Config, restConfig *rest.Config) error {
 	logrus.SetLevel(logrus.DebugLevel)
 	ctx := context.Background()
-	router := mux.NewRouter()
+
+	// Setting Up Default Authorizer
 	authorizer := func(req *http.Request) (string, bool, error) {
-		// TODO: Actually do authorization here with a shared Secret, compare
-		id := req.Header.Get("X-Tunnel-ID")
-		if id == "" {
-			return "", false, fmt.Errorf("X-Tunnel-ID not specified in request header")
+		id := req.Header.Get("X-API-Tunnel-Secret")
+		if id != cfg.Secret {
+			return "", false, fmt.Errorf("X-API-Tunnel-Secret not specified in request header")
 		}
 		return id, true, nil
 	}
+
+	// Initializing Remote Dialer Server
 	remoteDialerServer := remotedialer.New(authorizer, remotedialer.DefaultErrorWriter)
 
-	// rancher will connect via its remotedialer port-forwarder
+	router := mux.NewRouter()
 	router.Handle("/connect", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		logrus.Info("got a connection")
 		remoteDialerServer.ServeHTTP(w, req)
 	}))
 
@@ -96,10 +100,14 @@ func Start(cfg *Config) error {
 		}
 	}()
 
-	// the secret will be created in the cluster.
-	// only started once, always running, RDP pod, this app
+	// Setting Up Remote Dialer HTTPS Server
+	secretController, err := remotedialer.BuildSecretController(restConfig)
+	if err != nil {
+		return fmt.Errorf("build secret controller failed w/ err: %w", err)
+	}
+
 	if err := server.ListenAndServe(ctx, cfg.HTTPSPort, 0, router, &server.ListenOpts{
-		//Secrets:       wContext.Core.Secret(),
+		Secrets:       secretController,
 		CAName:        cfg.CAName,
 		CANamespace:   cfg.Namespace,
 		CertName:      cfg.CertCAName,

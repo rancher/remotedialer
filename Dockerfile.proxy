@@ -6,7 +6,7 @@ COPY go.sum .
 RUN go mod download
 
 COPY . .
-RUN CGO_ENABLED=0 go build -o proxy ./proxy
+RUN CGO_ENABLED=0 go build -o proxy ./cmd/proxy
 
 FROM scratch
 COPY --from=builder /app/proxy .
