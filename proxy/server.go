@@ -11,6 +11,8 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/rancher/dynamiclistener"
 	"github.com/rancher/dynamiclistener/server"
+
+	"github.com/rancher/wrangler/v3/pkg/generated/controllers/core"
 	"github.com/sirupsen/logrus"
 	"k8s.io/client-go/rest"
 
@@ -100,12 +102,14 @@ func Start(cfg *Config, restConfig *rest.Config) error {
 		}
 	}()
 
-	// Setting Up Remote Dialer HTTPS Server
-	secretController, err := remotedialer.BuildSecretController(restConfig)
+	// Setting Up Secret Controller
+	core, err := core.NewFactoryFromConfigWithOptions(restConfig, nil)
 	if err != nil {
 		return fmt.Errorf("build secret controller failed w/ err: %w", err)
 	}
+	secretController := core.Core().V1().Secret()
 
+	// Setting Up Remote Dialer HTTPS Server
 	if err := server.ListenAndServe(ctx, cfg.HTTPSPort, 0, router, &server.ListenOpts{
 		Secrets:       secretController,
 		CAName:        cfg.CAName,

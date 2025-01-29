@@ -4,7 +4,6 @@ import (
 	"github.com/sirupsen/logrus"
 	"k8s.io/client-go/rest"
 
-	"github.com/rancher/lasso/pkg/log"
 	"github.com/rancher/remotedialer/proxy"
 )
 
@@ -16,10 +15,9 @@ func main() {
 		logrus.Fatalf("fatal configuration error: %v", err)
 	}
 
-	// Initializing Wrangler
 	restConfig, err := rest.InClusterConfig()
 	if err != nil {
-		log.Errorf("failed to get in-cluster config: %w", err)
+		logrus.Errorf("failed to get in-cluster config: %w", err)
 		return
 	}
 

@@ -10,6 +10,7 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/rancher/remotedialer"
+	"github.com/rancher/wrangler/v3/pkg/generated/controllers/core"
 	v1 "github.com/rancher/wrangler/v3/pkg/generated/controllers/core/v1"
 	"github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -88,12 +89,13 @@ func New(serverSharedSecret, namespace, certSecretName, certServerName string, r
 }
 
 func buildDialer(namespace, certSecretName, certServerName string, restConfig *rest.Config) (*websocket.Dialer, error) {
-	secretController, err := remotedialer.BuildSecretController(restConfig)
+	core, err := core.NewFactoryFromConfigWithOptions(restConfig, nil)
 	if err != nil {
 		logrus.Error("build secret controller failed: %w, defaulting to non TLS connection", err)
-		return nonTLSDialer, nil
+		return nonTLSDialer, err
 	}
 
+	secretController := core.Core().V1().Secret()
 	secret, err := secretController.Get(namespace, certSecretName, metav1.GetOptions{})
 	if err != nil {
 		return nil, err

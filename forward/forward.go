@@ -71,13 +71,12 @@ func (r *PortForward) Stop() {
 }
 
 func (r *PortForward) Start() error {
-	var failed bool
-	var err error
-
-	r.readyCh = make(chan struct{}, 1)
+	var readyErr error
 
 	ctx, cancel := context.WithCancel(context.Background())
+
 	r.cancel = cancel
+	r.readyCh = make(chan struct{}, 1)
 
 	go func() {
 		for {
@@ -86,14 +85,14 @@ func (r *PortForward) Start() error {
 				logrus.Infoln("Goroutine stopped.")
 				return
 			default:
-				err = r.runForwarder(ctx, r.readyCh, r.stopCh, r.Ports)
+				err := r.runForwarder(ctx, r.readyCh, r.stopCh, r.Ports)
 				if err != nil {
 					if errors.Is(err, portforward.ErrLostConnectionToPod) {
 						logrus.Errorf("Lost connection to pod (no automatic retry in this refactor): %v", err)
 					} else {
 						logrus.Errorf("Non-restartable error: %v", err)
-						failed = true
 						r.readyCh <- struct{}{}
+						readyErr = err
 						return
 					}
 				}
@@ -104,15 +103,15 @@ func (r *PortForward) Start() error {
 	// wait for the port forward to be ready if not failed
 	<-r.readyCh
 
-	if failed {
-		return err
+	if readyErr != nil {
+		return readyErr
 	}
 
 	return nil
 }
 
 func (r *PortForward) runForwarder(ctx context.Context, readyCh, stopCh chan struct{}, ports []string) error {
-	podName, err := findPodName(ctx, r.namespace, r.labelSelector, r.podClient)
+	podName, err := lookForPodName(ctx, r.namespace, r.labelSelector, r.podClient)
 	if err != nil {
 		return err
 	}
@@ -143,7 +142,7 @@ func (r *PortForward) runForwarder(ctx context.Context, readyCh, stopCh chan str
 	return forwarder.ForwardPorts()
 }
 
-func findPodName(ctx context.Context, namespace, labelSelector string, podClient v1.PodClient) (string, error) {
+func lookForPodName(ctx context.Context, namespace, labelSelector string, podClient v1.PodClient) (string, error) {
 	for {
 		select {
 		case <-ctx.Done():

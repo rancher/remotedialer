@@ -73,9 +73,9 @@ metadata:
   name: remotedialer-proxy-secret-access
   namespace: cattle-system
 rules:
-- apiGroups: [""]              # "" indicates the core API group
-  resources: ["secrets"]       # We need to read secrets
-  verbs: ["get", "list", "watch", "create", "delete"]  # Allowed verbs
+- apiGroups: [""]              
+  resources: ["secrets"]      
+  verbs: ["get", "create"]  
 
 ---
 apiVersion: rbac.authorization.k8s.io/v1
@@ -85,8 +85,8 @@ metadata:
   namespace: cattle-system
 subjects:
 - kind: ServiceAccount
-  name: default                # The service account name
-  namespace: cattle-system     # The same namespace as the SA
+  name: default                
+  namespace: cattle-system     
 roleRef:
   kind: Role
   name: remotedialer-proxy-secret-access
