@@ -17,7 +17,7 @@ func main() {
 
 	restConfig, err := rest.InClusterConfig()
 	if err != nil {
-		logrus.Errorf("failed to get in-cluster config: %w", err)
+		logrus.Errorf("failed to get in-cluster config: %s", err.Error())
 		return
 	}
 
