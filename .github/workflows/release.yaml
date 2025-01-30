@@ -1,0 +1,25 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - v*
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name : Checkout repository
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+
+      - name: Create release on Github
+        env:
+          GH_TOKEN:  ${{ github.token }}
+        run: |
+          if [[ "${{ github.ref_name }}" == *-rc* ]]; then
+            gh --repo "${{ github.repository }}" release create ${{ github.ref_name }} --verify-tag --generate-notes --prerelease
+          else
+            gh --repo "${{ github.repository }}" release create ${{ github.ref_name }} --verify-tag --generate-notes
+          fi
