@@ -166,6 +166,7 @@ func main() {
 	}
 
 	proxyClient, err := proxyclient.New(
+		ctx,
 		connectSecret,
 		namespace,
 		certSecretName,

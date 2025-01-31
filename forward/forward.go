@@ -24,10 +24,9 @@ type PortForward struct {
 	podClient     v1.PodController
 	namespace     string
 	labelSelector string
-	Ports         []string
+	ports         []string
 
 	readyCh chan struct{}
-	stopCh  chan struct{}
 	cancel  context.CancelFunc
 }
 
@@ -59,15 +58,13 @@ func New(restConfig *rest.Config, podClient v1.PodController, namespace string, 
 		podClient:     podClient,
 		namespace:     namespace,
 		labelSelector: labelSelector,
-		Ports:         ports,
+		ports:         ports,
 		readyCh:       make(chan struct{}, 1),
-		stopCh:        make(chan struct{}, 1),
 	}, nil
 }
 
 func (r *PortForward) Stop() {
 	r.cancel()
-	r.stopCh <- struct{}{}
 }
 
 func (r *PortForward) Start() error {
@@ -85,7 +82,7 @@ func (r *PortForward) Start() error {
 				logrus.Infoln("Goroutine stopped.")
 				return
 			default:
-				err := r.runForwarder(ctx, r.readyCh, r.stopCh, r.Ports)
+				err := r.runForwarder(ctx, r.readyCh, r.ports)
 				if err != nil {
 					if errors.Is(err, portforward.ErrLostConnectionToPod) {
 						logrus.Errorf("Lost connection to pod (no automatic retry in this refactor): %v", err)
@@ -100,17 +97,22 @@ func (r *PortForward) Start() error {
 		}
 	}()
 
-	// wait for the port forward to be ready if not failed
-	<-r.readyCh
+	// wait for the port forward to be ready if not failed or cancelled
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
 
-	if readyErr != nil {
-		return readyErr
+		case <-r.readyCh:
+			if readyErr != nil {
+				return readyErr
+			}
+			return nil
+		}
 	}
-
-	return nil
 }
 
-func (r *PortForward) runForwarder(ctx context.Context, readyCh, stopCh chan struct{}, ports []string) error {
+func (r *PortForward) runForwarder(ctx context.Context, readyCh chan struct{}, ports []string) error {
 	podName, err := lookForPodName(ctx, r.namespace, r.labelSelector, r.podClient)
 	if err != nil {
 		return err
@@ -134,7 +136,7 @@ func (r *PortForward) runForwarder(ctx context.Context, readyCh, stopCh chan str
 	}, http.MethodPost, &serverURL)
 
 	stdout, stderr := new(bytes.Buffer), new(bytes.Buffer)
-	forwarder, err := portforward.New(dialer, ports, stopCh, readyCh, stdout, stderr)
+	forwarder, err := portforward.New(dialer, ports, ctx.Done(), readyCh, stdout, stderr)
 	if err != nil {
 		return err
 	}

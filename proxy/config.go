@@ -1,26 +1,70 @@
 package proxy
 
 import (
-	"github.com/kelseyhightower/envconfig"
+	"fmt"
+	"os"
+	"strconv"
 )
 
 type Config struct {
-	Namespace       string `default:"cattle-system"`
-	TLSName         string `split_words:"true"`
-	CAName          string `required:"true" split_words:"true"`
-	CertCANamespace string `required:"true" split_words:"true"`
-	CertCAName      string `required:"true" split_words:"true"`
-	Secret          string `required:"true" split_words:"true"`
-	ProxyPort       int    `required:"true" split_words:"true"`
-	PeerPort        int    `required:"true" split_words:"true"`
-	HTTPSPort       int    `required:"true" split_words:"true"`
+	TLSName         string // certificate client name (SAN)
+	CAName          string // certificate authority secret name
+	CertCANamespace string // certificate secret namespace
+	CertCAName      string // certificate secret name
+	Secret          string // remotedialer secret
+	ProxyPort       int    // tcp remotedialer-proxy port
+	PeerPort        int    // cluster-external service port
+	HTTPSPort       int    // https remotedialer-proxy port
+}
+
+func requiredString(key string) (string, error) {
+	value := os.Getenv(key)
+	if value == "" {
+		return "", fmt.Errorf("%s cannot be empty", key)
+	}
+	return value, nil
+}
+
+func requiredPort(key string) (int, error) {
+	valueStr := os.Getenv(key)
+	port, err := strconv.Atoi(valueStr)
+	if err != nil {
+		return 0, fmt.Errorf("failed to read %s: %w", key, err)
+	}
+	if port <= 0 {
+		return 0, fmt.Errorf("%s should be greater than 0", key)
+	}
+	return port, nil
 }
 
 func ConfigFromEnvironment() (*Config, error) {
-	var c Config
-	err := envconfig.Process("", &c)
-	if err != nil {
+	var err error
+	var config Config
+
+	if config.TLSName, err = requiredString("TLS_NAME"); err != nil {
 		return nil, err
 	}
-	return &c, nil
+	if config.CAName, err = requiredString("CA_NAME"); err != nil {
+		return nil, err
+	}
+	if config.CertCANamespace, err = requiredString("CERT_CA_NAMESPACE"); err != nil {
+		return nil, err
+	}
+	if config.CertCAName, err = requiredString("CERT_CA_NAME"); err != nil {
+		return nil, err
+	}
+	if config.Secret, err = requiredString("SECRET"); err != nil {
+		return nil, err
+	}
+	if config.ProxyPort, err = requiredPort("PROXY_PORT"); err != nil {
+		return nil, err
+	}
+	if config.PeerPort, err = requiredPort("PEER_PORT"); err != nil {
+		return nil, err
+	}
+	if config.HTTPSPort, err = requiredPort("HTTPS_PORT"); err != nil {
+		return nil, err
+	}
+
+	return &config, nil
 }

@@ -6,28 +6,27 @@ import (
 	"crypto/x509"
 	"fmt"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
 	"github.com/rancher/remotedialer"
 	"github.com/rancher/wrangler/v3/pkg/generated/controllers/core"
 	v1 "github.com/rancher/wrangler/v3/pkg/generated/controllers/core/v1"
+
 	"github.com/sirupsen/logrus"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/cache"
 )
 
 const (
-	defaultServerAddr = "wss://127.0.0.1"
-	defaultServerPort = 5555
-	defaultServerPath = "/connect"
-)
-
-var (
-	nonTLSDialer = &websocket.Dialer{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-	}
-	retryTimeout = 1 * time.Second
+	defaultServerAddr        = "wss://127.0.0.1"
+	defaultServerPort        = 5555
+	defaultServerPath        = "/connect"
+	retryTimeout             = 1 * time.Second
+	certificateWatchInterval = 10 * time.Second
 )
 
 type PortForwarder interface {
@@ -41,13 +40,19 @@ type ProxyClient struct {
 	forwarder           PortForwarder
 	serverUrl           string
 	serverConnectSecret string
-	dialer              *websocket.Dialer
-	secretController    v1.SecretController
+
+	dialer    *websocket.Dialer
+	dialerMtx sync.Mutex
+
+	secretController v1.SecretController
+	namespace        string
+	certSecretName   string
+	certServerName   string
 
 	onConnect func(ctx context.Context, session *remotedialer.Session) error
 }
 
-func New(serverSharedSecret, namespace, certSecretName, certServerName string, restConfig *rest.Config, forwarder PortForwarder, opts ...ProxyClientOpt) (*ProxyClient, error) {
+func New(ctx context.Context, serverSharedSecret, namespace, certSecretName, certServerName string, restConfig *rest.Config, forwarder PortForwarder, opts ...ProxyClientOpt) (*ProxyClient, error) {
 	if restConfig == nil {
 		return nil, fmt.Errorf("restConfig required")
 	}
@@ -69,16 +74,18 @@ func New(serverSharedSecret, namespace, certSecretName, certServerName string, r
 	}
 
 	serverUrl := fmt.Sprintf("%s:%d%s", defaultServerAddr, defaultServerPort, defaultServerPath)
-	dialer, err := buildDialer(namespace, certSecretName, certServerName, restConfig)
-	if err != nil {
-		return nil, fmt.Errorf("couldn't build dialer: %w", err)
-	}
 
 	client := &ProxyClient{
 		serverUrl:           serverUrl,
 		forwarder:           forwarder,
-		dialer:              dialer,
 		serverConnectSecret: serverSharedSecret,
+		certSecretName:      certSecretName,
+		certServerName:      certServerName,
+		namespace:           namespace,
+	}
+
+	if err := client.buildDialer(ctx, restConfig); err != nil {
+		return nil, fmt.Errorf("dialer build failed %w: ", err)
 	}
 
 	for _, opt := range opts {
@@ -88,19 +95,66 @@ func New(serverSharedSecret, namespace, certSecretName, certServerName string, r
 	return client, nil
 }
 
-func buildDialer(namespace, certSecretName, certServerName string, restConfig *rest.Config) (*websocket.Dialer, error) {
+func (c *ProxyClient) buildDialer(ctx context.Context, restConfig *rest.Config) error {
 	core, err := core.NewFactoryFromConfigWithOptions(restConfig, nil)
 	if err != nil {
-		logrus.Error("build secret controller failed: %w, defaulting to non TLS connection", err)
-		return nonTLSDialer, err
+		return fmt.Errorf("build secret controller failed: %w", err)
 	}
 
 	secretController := core.Core().V1().Secret()
-	secret, err := secretController.Get(namespace, certSecretName, metav1.GetOptions{})
-	if err != nil {
-		return nil, err
+	secretController.Informer().AddEventHandler(
+		cache.ResourceEventHandlerFuncs{
+			UpdateFunc: func(oldSecret, newSecret interface{}) {
+				updatedSecretCert, ok := newSecret.(*corev1.Secret)
+				if ok {
+					if updatedSecretCert.Name == c.certSecretName {
+						rootCAs, err := buildCertFromSecret(c.namespace, c.certSecretName, updatedSecretCert)
+						if err != nil {
+							logrus.Errorf("build certificate failed: %s", err.Error())
+							return
+						}
+
+						c.dialerMtx.Lock()
+						c.dialer = &websocket.Dialer{
+							TLSClientConfig: &tls.Config{
+								RootCAs:    rootCAs,
+								ServerName: c.certServerName,
+							},
+						}
+						c.dialerMtx.Unlock()
+						logrus.Infof("certificate updated successfully")
+					}
+				}
+			},
+		})
+
+	if err := core.Start(ctx, 1); err != nil {
+		return fmt.Errorf("secret controller factory start failed: %w", err)
 	}
 
+	secret, err := secretController.Get(c.namespace, c.certSecretName, metav1.GetOptions{})
+	if err != nil {
+		return err
+	}
+
+	rootCAs, err := buildCertFromSecret(c.namespace, c.certSecretName, secret)
+	if err != nil {
+		return fmt.Errorf("build certificate failed: %w", err)
+	}
+
+	c.dialerMtx.Lock()
+	c.dialer = &websocket.Dialer{
+		TLSClientConfig: &tls.Config{
+			RootCAs:    rootCAs,
+			ServerName: c.certServerName,
+		},
+	}
+	c.dialerMtx.Unlock()
+
+	return nil
+}
+
+func buildCertFromSecret(namespace, certSecretName string, secret *corev1.Secret) (*x509.CertPool, error) {
 	crtData, exists := secret.Data["tls.crt"]
 	if !exists {
 		return nil, fmt.Errorf("secret %s/%s missing tls.crt field", namespace, certSecretName)
@@ -111,12 +165,7 @@ func buildDialer(namespace, certSecretName, certServerName string, restConfig *r
 		return nil, fmt.Errorf("failed to parse tls.crt from secret into a CA pool")
 	}
 
-	return &websocket.Dialer{
-		TLSClientConfig: &tls.Config{
-			RootCAs:    rootCAs,
-			ServerName: certServerName,
-		},
-	}, nil
+	return rootCAs, nil
 }
 
 func (c *ProxyClient) Run(ctx context.Context) {
@@ -148,7 +197,11 @@ func (c *ProxyClient) Run(ctx context.Context) {
 					return nil
 				}
 
-				if err := remotedialer.ClientConnect(ctx, c.serverUrl, headers, c.dialer, onConnectAuth, onConnect); err != nil {
+				c.dialerMtx.Lock()
+				dialer := c.dialer
+				c.dialerMtx.Unlock()
+
+				if err := remotedialer.ClientConnect(ctx, c.serverUrl, headers, dialer, onConnectAuth, onConnect); err != nil {
 					logrus.Errorf("remotedialer.ClientConnect error: %s", err.Error())
 					c.forwarder.Stop()
 					time.Sleep(retryTimeout)

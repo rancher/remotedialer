@@ -7,6 +7,7 @@ import (
 	"math/rand"
 	"net"
 	"net/http"
+	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/rancher/dynamiclistener"
@@ -17,6 +18,11 @@ import (
 	"k8s.io/client-go/rest"
 
 	"github.com/rancher/remotedialer"
+)
+
+const (
+	listClientsRetryCount = 10
+	listClientSleepTime   = 1 * time.Second
 )
 
 func runProxyListener(ctx context.Context, cfg *Config, server *remotedialer.Server) error {
@@ -34,23 +40,33 @@ func runProxyListener(ctx context.Context, cfg *Config, server *remotedialer.Ser
 		}
 
 		go func() {
-			clients := server.ListClients()
-			if len(clients) == 0 {
-				logrus.Info("proxy TCP connection failed: no clients")
-				conn.Close()
-				return
-			}
-			client := clients[rand.Intn(len(clients))]
-			peerAddr := fmt.Sprintf(":%d", cfg.PeerPort) // rancher's special https server for imperative API
-			clientConn, err := server.Dialer(client)(ctx, "tcp", peerAddr)
-			if err != nil {
-				logrus.Errorf("proxy dialing %s failed: %v", peerAddr, err)
-				conn.Close()
-				return
-			}
+			var retryTimes = 0
+			for {
+				clients := server.ListClients()
+				if len(clients) == 0 {
+					retryTimes++
+					if retryTimes > listClientsRetryCount {
+						conn.Close()
+						return
+					}
 
-			go pipe(conn, clientConn)
-			go pipe(clientConn, conn)
+					logrus.Info("proxy TCP connection failed: no clients, retrying in a sec")
+					time.Sleep(listClientSleepTime)
+				} else {
+					client := clients[rand.Intn(len(clients))]
+					peerAddr := fmt.Sprintf(":%d", cfg.PeerPort) // rancher's special https server for imperative API
+					clientConn, err := server.Dialer(client)(ctx, "tcp", peerAddr)
+					if err != nil {
+						logrus.Errorf("proxy dialing %s failed: %v", peerAddr, err)
+						conn.Close()
+						return
+					}
+
+					go pipe(conn, clientConn)
+					go pipe(clientConn, conn)
+					break
+				}
+			}
 		}()
 	}
 }
@@ -107,13 +123,17 @@ func Start(cfg *Config, restConfig *rest.Config) error {
 	if err != nil {
 		return fmt.Errorf("build secret controller failed w/ err: %w", err)
 	}
+
+	if err := core.Start(ctx, 1); err != nil {
+		return fmt.Errorf("secretController factory start failed: %w", err)
+	}
+
 	secretController := core.Core().V1().Secret()
 
 	// Setting Up Remote Dialer HTTPS Server
 	if err := server.ListenAndServe(ctx, cfg.HTTPSPort, 0, router, &server.ListenOpts{
 		Secrets:       secretController,
 		CAName:        cfg.CAName,
-		CANamespace:   cfg.Namespace,
 		CertName:      cfg.CertCAName,
 		CertNamespace: cfg.CertCANamespace,
 		TLSListenerConfig: dynamiclistener.Config{
@@ -121,6 +141,10 @@ func Start(cfg *Config, restConfig *rest.Config) error {
 			FilterCN: func(cns ...string) []string {
 				return []string{cfg.TLSName}
 			},
+			RegenerateCerts: func() bool {
+				return true
+			},
+			ExpirationDaysCheck: 10,
 		},
 	}); err != nil {
 		return fmt.Errorf("extension server exited with an error: %w", err)
