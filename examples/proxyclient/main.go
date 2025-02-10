@@ -21,10 +21,10 @@ import (
 
 var (
 	namespace             = "cattle-system"
-	label                 = "app=remotedialer-proxy"
-	certSecretName        = "remotedialer-proxy-cert"
-	certServerName        = "remotedialer-proxy"
-	connectSecret         = "secret"
+	label                 = "app=api-extension"
+	certSecretName        = "api-extension-ca-name"
+	certServerName        = "api-extension-tls-name"
+	connectSecret         = "api-extension"
 	ports                 = []string{"5555:8443"}
 	fakeImperativeAPIAddr = "0.0.0.0:8888"
 )
