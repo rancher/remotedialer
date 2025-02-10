@@ -22,9 +22,9 @@ serviceAccount:
 
 service:
   type: ClusterIP
-  httpsPort: 8443
-  proxyPort: 6666
-  peerPort: 8888
+  httpsPort: 0
+  proxyPort: 0
+  peerPort: 0
   secret: "api-extension"
   caName: "api-extension-ca-name"
   certCAName: "api-extension-cert-ca-name"

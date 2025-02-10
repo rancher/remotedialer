@@ -32,10 +32,10 @@ spec:
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
             - name: https
-              containerPort: {{ .Values.service.httpsPort }}
+              containerPort: {{ default 8443 .Values.service.httpsPort }}
               protocol: TCP
             - name: proxy
-              containerPort: {{ .Values.service.proxyPort }}
+              containerPort: {{ default 6666 .Values.service.proxyPort }}
               protocol: TCP
           env:
             - name: CERT_CA_NAME
@@ -49,8 +49,8 @@ spec:
             - name: SECRET
               value: {{ .Values.service.secret }}
             - name: HTTPS_PORT
-              value: {{ .Values.service.httpsPort | quote }}
+              value: {{ default 8443 .Values.service.httpsPort | quote }}
             - name: PROXY_PORT
-              value: {{ .Values.service.proxyPort | quote }}
+              value: {{ default 6666 .Values.service.proxyPort | quote }}
             - name: PEER_PORT
-              value: {{ .Values.service.peerPort | quote }}
+              value: {{ default 5555 .Values.service.peerPort | quote }}
