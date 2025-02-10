@@ -53,4 +53,4 @@ spec:
             - name: PROXY_PORT
               value: {{ default 6666 .Values.service.proxyPort | quote }}
             - name: PEER_PORT
-              value: {{ default 5555 .Values.service.peerPort | quote }}
+              value: {{ default 8888 .Values.service.peerPort | quote }}

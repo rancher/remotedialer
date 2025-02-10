@@ -8,11 +8,11 @@ metadata:
 spec:
   type: {{ .Values.service.type }}
   ports:
-    - port: {{ .Values.service.httpsPort }}
+    - port: {{ default 8443 .Values.service.httpsPort }}
       targetPort: https
       protocol: TCP
       name: https
-    - port: {{ .Values.service.proxyPort }}
+    - port: {{ default 6666 .Values.service.proxyPort }}
       targetPort: proxy
       protocol: TCP
       name: proxy
