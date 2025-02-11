@@ -1,8 +1,7 @@
 FROM golang:1.23 as builder
 WORKDIR /app
-COPY go.mod .
-RUN go mod download
 COPY . .
+RUN go mod download
 RUN go build -o /app/tcp-client main.go
 
 FROM debian:bookworm-slim

@@ -21,7 +21,7 @@ spec:
         imagePullPolicy: IfNotPresent
         env:
         - name: TARGET_HOST
-          value: "remotedialer-proxy.cattle-system.svc.cluster.local"
+          value: "api-extension.cattle-system.svc.cluster.local"
         - name: TARGET_PORT
           value: "6666"
         - name: SEND_INTERVAL

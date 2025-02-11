@@ -12,7 +12,7 @@ import (
 )
 
 var (
-	targetHost = "remotedialer-proxy.cattle-system.svc.cluster.local"
+	targetHost = "api-extension.cattle-system.svc.cluster.local"
 	targetPort = 6666
 	retryDelay = 5 * time.Second
 )
