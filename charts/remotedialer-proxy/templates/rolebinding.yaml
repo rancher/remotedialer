@@ -1,7 +1,7 @@
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata: 
-  name: {{ printf "%s-binding" (include "remotedialer-proxy.role" .) }}
+  name: {{ include "remotedialer-proxy.rolebinding" . }}
   namespace: {{ include "remotedialer-proxy.namespace" . }}
 subjects:
     - kind: ServiceAccount

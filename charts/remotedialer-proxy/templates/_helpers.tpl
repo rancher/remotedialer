@@ -6,28 +6,17 @@ API Extension Name - To be used in other variables
 {{- end}}
 
 {{/*
-Expand the name of the chart.
+Namespace to use
 */}}
-{{- define "remotedialer-proxy.name" -}}
-{{- default .Chart.Name .Values.nameOverride | trunc 63 | trimSuffix "-" }}
+{{- define "remotedialer-proxy.namespace" -}}
+{{- default "cattle-system" .Values.namespaceOverride }}
 {{- end }}
 
 {{/*
-Create a default fully qualified app name.
-We truncate at 63 chars because some Kubernetes name fields are limited to this (by the DNS naming spec).
-If release name contains chart name it will be used as a full name.
+Expand the name of the chart.
 */}}
-{{- define "remotedialer-proxy.fullname" -}}
-{{- if .Values.fullnameOverride }}
-{{- .Values.fullnameOverride | trunc 63 | trimSuffix "-" }}
-{{- else }}
-{{- $name := default .Chart.Name .Values.nameOverride }}
-{{- if contains $name .Release.Name }}
-{{- .Release.Name | trunc 63 | trimSuffix "-" }}
-{{- else }}
-{{- printf "%s-%s" .Release.Name $name | trunc 63 | trimSuffix "-" }}
-{{- end }}
-{{- end }}
+{{- define "remotedialer-proxy.name" -}}
+{{- default (include "api-extension.name" .) .Values.nameOverride | trunc 63 | trimSuffix "-" }}
 {{- end }}
 
 {{/*
@@ -54,7 +43,7 @@ Selector labels
 */}}
 {{- define "remotedialer-proxy.selectorLabels" -}}
 app.kubernetes.io/name: {{ include "remotedialer-proxy.name" . }}
-app.kubernetes.io/instance: {{ .Release.Name }}
+app.kubernetes.io/instance: {{ include "api-extension.name" . }}
 app: api-extension
 {{- end }}
 
@@ -62,20 +51,19 @@ app: api-extension
 Create the name of the service account to use
 */}}
 {{- define "remotedialer-proxy.serviceAccountName" -}}
-{{- default (printf "%s-sa" (include "api-extension.name" .)) .Values.serviceAccount.name }}
-{{- end }}
-
-
-{{/*
-Namespace to use
-*/}}
-{{- define "remotedialer-proxy.namespace" -}}
-{{- default "cattle-system" .Values.namespaceOverride }}
+{{- default (include "api-extension.name" .) .Values.serviceAccount.name }}
 {{- end }}
 
 {{/*
 Role to use
 */}}
 {{- define "remotedialer-proxy.role" -}}
-{{- default (printf "%s-role" (include "api-extension.name" .)) .Values.roleOverride }}
+{{- default (include "api-extension.name" .) .Values.roleOverride }}
+{{- end }}
+
+{{/*
+Role Binding to use
+*/}}
+{{- define "remotedialer-proxy.rolebinding" -}}
+{{- default (include "remotedialer-proxy.role" .) (include "api-extension.name" .) }}
 {{- end }}

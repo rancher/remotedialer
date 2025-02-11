@@ -12,5 +12,4 @@ annotations:
   catalog.cattle.io/os: linux
   catalog.cattle.io/permits-os: linux,windows
   catalog.cattle.io/rancher-version: ">= 2.11.0-0"
-  catalog.cattle.io/kube-version: "< 1.32.0-0"
   catalog.cattle.io/managed: "true"

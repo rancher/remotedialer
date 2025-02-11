@@ -1,7 +1,7 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "remotedialer-proxy.fullname" . }}
+  name: {{ include "remotedialer-proxy.name" . }}
   namespace: {{ include "remotedialer-proxy.namespace" . }}
 spec:
   replicas: {{ .Values.replicaCount }}
@@ -27,7 +27,7 @@ spec:
       {{- end }}
       serviceAccountName: {{ include "remotedialer-proxy.serviceAccountName" . }}
       containers:
-        - name: {{ .Chart.Name }}
+        - name: {{ include "remotedialer-proxy.name" . }}
           image: "{{ .Values.image.repository }}{{print "/" .Chart.Name }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
