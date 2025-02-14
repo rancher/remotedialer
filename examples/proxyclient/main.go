@@ -158,7 +158,12 @@ func main() {
 		logrus.Fatal(err)
 	}
 
+	if err := coreFactory.Start(ctx, 1); err != nil {
+		logrus.Fatal(err)
+	}
+
 	podClient := coreFactory.Core().V1().Pod()
+	secretContoller := coreFactory.Core().V1().Secret()
 
 	portForwarder, err := forward.New(cfg, podClient, namespace, label, ports)
 	if err != nil {
@@ -171,7 +176,7 @@ func main() {
 		namespace,
 		certSecretName,
 		certServerName,
-		cfg,
+		secretContoller,
 		portForwarder,
 	)
 	if err != nil {

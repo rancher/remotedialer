@@ -52,9 +52,9 @@ type ProxyClient struct {
 	onConnect func(ctx context.Context, session *remotedialer.Session) error
 }
 
-func New(ctx context.Context, serverSharedSecret, namespace, certSecretName, certServerName string, restConfig *rest.Config, forwarder PortForwarder, opts ...ProxyClientOpt) (*ProxyClient, error) {
-	if restConfig == nil {
-		return nil, fmt.Errorf("restConfig required")
+func New(ctx context.Context, serverSharedSecret, namespace, certSecretName, certServerName string, secretController v1.SecretController, forwarder PortForwarder, opts ...ProxyClientOpt) (*ProxyClient, error) {
+	if secretController == nil {
+		return nil, fmt.Errorf("SecretController required")
 	}
 
 	if forwarder == nil {
@@ -84,7 +84,7 @@ func New(ctx context.Context, serverSharedSecret, namespace, certSecretName, cer
 		namespace:           namespace,
 	}
 
-	if err := client.buildDialer(ctx, restConfig); err != nil {
+	if err := client.buildDialer(ctx, secretController); err != nil {
 		return nil, fmt.Errorf("dialer build failed %w: ", err)
 	}
 
@@ -95,36 +95,28 @@ func New(ctx context.Context, serverSharedSecret, namespace, certSecretName, cer
 	return client, nil
 }
 
-func (c *ProxyClient) buildDialer(ctx context.Context, restConfig *rest.Config) error {
-	core, err := core.NewFactoryFromConfigWithOptions(restConfig, nil)
-	if err != nil {
-		return fmt.Errorf("build secret controller failed: %w", err)
-	}
+func (c *ProxyClient) buildDialer(ctx context.Context, secretController v1.SecretController) error {
+	secretController.OnChange(ctx, "remotedialer-proxy", func(_ string, newSecret *corev1.Secret) (*corev1.Secret, error) {
+		if newSecret.Name == c.certSecretName && newSecret.Namespace == c.namespace {
+			rootCAs, err := buildCertFromSecret(c.namespace, c.certSecretName, newSecret)
+			if err != nil {
+				logrus.Errorf("build certificate failed: %s", err.Error())
+				return nil, err
+			}
 
-	secretController := core.Core().V1().Secret()
-	secretController.OnChange(ctx, "remotedialer-proxy", func(_ string, secret *corev1.Secret) (*corev1.Secret, error) {
-				updatedSecretCert, ok := newSecret.(*corev1.Secret)
-				if ok {
-					if updatedSecretCert.Name == c.certSecretName {
-						rootCAs, err := buildCertFromSecret(c.namespace, c.certSecretName, updatedSecretCert)
-						if err != nil {
-							logrus.Errorf("build certificate failed: %s", err.Error())
-							return
-						}
+			c.dialerMtx.Lock()
+			c.dialer = &websocket.Dialer{
+				TLSClientConfig: &tls.Config{
+					RootCAs:    rootCAs,
+					ServerName: c.certServerName,
+				},
+			}
+			c.dialerMtx.Unlock()
+			logrus.Infof("certificate updated successfully")
+		}
 
-						c.dialerMtx.Lock()
-						c.dialer = &websocket.Dialer{
-							TLSClientConfig: &tls.Config{
-								RootCAs:    rootCAs,
-								ServerName: c.certServerName,
-							},
-						}
-						c.dialerMtx.Unlock()
-						logrus.Infof("certificate updated successfully")
-					}
-				}
-			},
-		})
+		return newSecret, nil
+	})
 
 	secret, err := secretController.Get(c.namespace, c.certSecretName, metav1.GetOptions{})
 	if err != nil {

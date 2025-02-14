@@ -19,6 +19,10 @@ import (
 	"k8s.io/client-go/transport/spdy"
 )
 
+var (
+	podConnectionRetryTimeout = 1 * time.Second
+)
+
 type PortForward struct {
 	restConfig    *rest.Config
 	podClient     v1.PodController
@@ -26,8 +30,9 @@ type PortForward struct {
 	labelSelector string
 	ports         []string
 
-	readyCh chan struct{}
-	cancel  context.CancelFunc
+	readyCh  chan struct{}
+	readyErr chan error
+	cancel   context.CancelFunc
 }
 
 func New(restConfig *rest.Config, podClient v1.PodController, namespace string, labelSelector string, ports []string) (*PortForward, error) {
@@ -68,12 +73,11 @@ func (r *PortForward) Stop() {
 }
 
 func (r *PortForward) Start() error {
-	var readyErr error
-
 	ctx, cancel := context.WithCancel(context.Background())
 
 	r.cancel = cancel
 	r.readyCh = make(chan struct{}, 1)
+	r.readyErr = make(chan error, 1)
 
 	go func() {
 		for {
@@ -85,11 +89,10 @@ func (r *PortForward) Start() error {
 				err := r.runForwarder(ctx, r.readyCh, r.ports)
 				if err != nil {
 					if errors.Is(err, portforward.ErrLostConnectionToPod) {
-						logrus.Errorf("Lost connection to pod (no automatic retry in this refactor): %v", err)
+						logrus.Errorf("Lost connection to pod: %v, retrying in %d secs.", err, podConnectionRetryTimeout/time.Second)
 					} else {
 						logrus.Errorf("Non-restartable error: %v", err)
-						r.readyCh <- struct{}{}
-						readyErr = err
+						r.readyErr <- err
 						return
 					}
 				}
@@ -97,15 +100,17 @@ func (r *PortForward) Start() error {
 		}
 	}()
 
-	// wait for the port forward to be ready if not failed or cancelled
 	for {
 		select {
 		case <-ctx.Done():
 			return nil
 
 		case <-r.readyCh:
-			if readyErr != nil {
-				return readyErr
+			return nil
+
+		case err := <-r.readyErr:
+			if err != nil {
+				return err
 			}
 			return nil
 		}
