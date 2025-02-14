@@ -1,9 +1,9 @@
 apiVersion: v2
 name: remotedialer-proxy
-description: A Helm chart for Kubernetes
+description: creates a bridge between k8s api-server and imperative api when Rancher is outside of the cluster  
 type: application
 version: 0.0.1
-appVersion: "0.0.1"
+appVersion: 0.0.1
 annotations:
   catalog.cattle.io/certified: rancher
   catalog.cattle.io/hidden: "true"

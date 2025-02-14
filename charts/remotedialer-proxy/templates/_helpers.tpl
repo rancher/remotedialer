@@ -1,3 +1,11 @@
+{{- define "system_default_registry" -}}
+{{- if .Values.global.cattle.systemDefaultRegistry -}}
+{{- printf "%s/" .Values.global.cattle.systemDefaultRegistry -}}
+{{- else -}}
+{{- "" -}}
+{{- end -}}
+{{- end -}}
+
 {{/*
 API Extension Name - To be used in other variables
 */}}
@@ -44,7 +52,7 @@ Selector labels
 {{- define "remotedialer-proxy.selectorLabels" -}}
 app.kubernetes.io/name: {{ include "remotedialer-proxy.name" . }}
 app.kubernetes.io/instance: {{ include "api-extension.name" . }}
-app: api-extension
+app: {{ include "api-extension.name" . }}
 {{- end }}
 
 {{/*
@@ -65,5 +73,5 @@ Role to use
 Role Binding to use
 */}}
 {{- define "remotedialer-proxy.rolebinding" -}}
-{{- default (include "remotedialer-proxy.role" .) (include "api-extension.name" .) }}
+{{- include "api-extension.name" . }}
 {{- end }}

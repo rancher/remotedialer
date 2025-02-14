@@ -19,7 +19,6 @@ spec:
         {{- with .Values.podLabels }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
-      creationTimestamp: null
     spec:
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
@@ -28,14 +27,14 @@ spec:
       serviceAccountName: {{ include "remotedialer-proxy.serviceAccountName" . }}
       containers:
         - name: {{ include "remotedialer-proxy.name" . }}
-          image: "{{ .Values.image.repository }}{{print "/" .Chart.Name }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          image: {{ template "system_default_registry" $ }}{{ $.Values.image.repository }}{{print "/" .Chart.Name }}:{{default .Chart.AppVersion .Values.image.tag }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
             - name: https
-              containerPort: {{ default 8443 .Values.service.httpsPort }}
+              containerPort: {{ .Values.service.httpsPort }}
               protocol: TCP
             - name: proxy
-              containerPort: {{ default 6666 .Values.service.proxyPort }}
+              containerPort: {{ .Values.service.proxyPort }}
               protocol: TCP
           env:
             - name: CERT_CA_NAME
@@ -49,8 +48,8 @@ spec:
             - name: SECRET
               value: {{ .Values.service.secret }}
             - name: HTTPS_PORT
-              value: {{ default 8443 .Values.service.httpsPort | quote }}
+              value: {{ .Values.service.httpsPort | quote }}
             - name: PROXY_PORT
-              value: {{ default 6666 .Values.service.proxyPort | quote }}
+              value: {{ .Values.service.proxyPort | quote }}
             - name: PEER_PORT
-              value: {{ default 8888 .Values.service.peerPort | quote }}
+              value: {{ .Values.service.peerPort | quote }}

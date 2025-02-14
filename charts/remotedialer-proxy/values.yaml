@@ -12,7 +12,6 @@ image:
 
 imagePullSecrets: []
 nameOverride: ""
-fullnameOverride: ""
 namespaceOverride: ""
 roleOverride: ""
 apiExtensionName: ""
@@ -22,12 +21,15 @@ serviceAccount:
 
 service:
   type: ClusterIP
-  httpsPort: 0
-  proxyPort: 0
-  peerPort: 0
+  httpsPort: 8443
+  proxyPort: 6666
+  peerPort: 8888
   secret: "api-extension"
   caName: "api-extension-ca-name"
   certCAName: "api-extension-cert-ca-name"
   tlsName: "api-extension-tls-name"
   certCAName: "api-extension-ca"
 
+global:
+  cattle:
+    systemDefaultRegistry: ""
