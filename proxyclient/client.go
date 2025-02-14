@@ -102,9 +102,7 @@ func (c *ProxyClient) buildDialer(ctx context.Context, restConfig *rest.Config) 
 	}
 
 	secretController := core.Core().V1().Secret()
-	secretController.Informer().AddEventHandler(
-		cache.ResourceEventHandlerFuncs{
-			UpdateFunc: func(oldSecret, newSecret interface{}) {
+	secretController.OnChange(ctx, "remotedialer-proxy", func(_ string, secret *corev1.Secret) (*corev1.Secret, error) {
 				updatedSecretCert, ok := newSecret.(*corev1.Secret)
 				if ok {
 					if updatedSecretCert.Name == c.certSecretName {
