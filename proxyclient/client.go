@@ -126,10 +126,6 @@ func (c *ProxyClient) buildDialer(ctx context.Context, restConfig *rest.Config) 
 			},
 		})
 
-	if err := core.Start(ctx, 1); err != nil {
-		return fmt.Errorf("secret controller factory start failed: %w", err)
-	}
-
 	secret, err := secretController.Get(c.namespace, c.certSecretName, metav1.GetOptions{})
 	if err != nil {
 		return err
