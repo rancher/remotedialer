@@ -1,0 +1,28 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fakek8s-deployment
+  namespace: cattle-system
+  labels:
+    app: fakek8s
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: fakek8s
+  template:
+    metadata:
+      labels:
+        app: fakek8s
+    spec:
+      containers:
+      - name: fakek8s
+        image: rancher/fakek8s:latest
+        imagePullPolicy: IfNotPresent
+        env:
+        - name: TARGET_HOST
+          value: "api-extension.cattle-system.svc.cluster.local"
+        - name: TARGET_PORT
+          value: "6666"
+        - name: SEND_INTERVAL
+          value: "1"
