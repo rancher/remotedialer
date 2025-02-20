@@ -143,7 +143,12 @@ func (c *ProxyClient) Run(ctx context.Context) {
 
 			default:
 				logrus.Info("RDPClient: Checking if dialer is built...")
-				if c.dialer != nil {
+
+				c.dialerMtx.Lock()
+				dialer := c.dialer
+				c.dialerMtx.Unlock()
+
+				if dialer != nil {
 					logrus.Info("RDPClient: Dialer is built. Ready to start.")
 					break LookForDialer
 				}
