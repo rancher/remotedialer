@@ -8,7 +8,7 @@ annotations:
   catalog.cattle.io/certified: rancher
   catalog.cattle.io/hidden: "true"
   catalog.cattle.io/namespace: cattle-system
-  catalog.cattle.io/release-name: rancher-remotedialer-proxy
+  catalog.cattle.io/release-name: remotedialer-proxy
   catalog.cattle.io/os: linux
   catalog.cattle.io/permits-os: linux,windows
   catalog.cattle.io/rancher-version: ">= 2.11.0-0"
