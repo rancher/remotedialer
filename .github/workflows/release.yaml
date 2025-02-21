@@ -103,7 +103,7 @@ jobs:
           context: .
           file: ./Dockerfile.proxy
           platforms: "linux/${{ matrix.arch }}"
-          outputs: type=image,name=${{ env.REPO }}/remotedialier-proxy,push-by-digest=true,name-canonical=true,push=true
+          outputs: type=image,name=${{ env.REPO }}/remotedialer-proxy,push-by-digest=true,name-canonical=true,push=true
 
       - name: Export digest
         run: |
@@ -161,5 +161,5 @@ jobs:
       - name: Create manifest list and push
         working-directory: /tmp/digests
         run: |
-          docker buildx imagetools create -t ${{ env.REGISTRY }}/${{ env.REPO }}/remotedialier-proxy:${{ env.TAG_NAME }} \
-            $(printf '${{ env.REPO }}/remotedialier-proxy@sha256:%s ' *)
+          docker buildx imagetools create -t ${{ env.REGISTRY }}/${{ env.REPO }}/remotedialer-proxy:${{ env.TAG_NAME }} \
+            $(printf '${{ env.REPO }}/remotedialer-proxy@sha256:%s ' *)
