@@ -18,17 +18,43 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name : Checkout repository
+      - name: Checkout repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Install helm
+        env:
+          HELM_VERSION: "v3.13.3"
+        run: |
+          curl -sL https://get.helm.sh/helm-${HELM_VERSION}-linux-amd64.tar.gz | tar xvzf - -C /usr/local/bin --strip-components=1
+
+      - name: Create helm tarball
+        env:
+          HELM_CHART_VERSION: "${{ github.ref_name }}"
+        run: |
+          mkdir -p build dist/artifacts
+          cp -rf charts build/
+
+          sed -i \
+              -e 's/^version:.*/version: '${HELM_CHART_VERSION}'/' \
+              -e 's/appVersion:.*/appVersion: '${HELM_CHART_VERSION}'/' \
+              build/charts/remotedialer-proxy/Chart.yaml
+
+          sed -i \
+              -e 's/tag:.*/tag: '${HELM_CHART_VERSION}'/' \
+              build/charts/remotedialer-proxy/values.yaml
+
+          helm package -d ./dist/artifacts ./build/charts/remotedialer-proxy
 
       - name: Create release on Github
         env:
           GH_TOKEN:  ${{ github.token }}
         run: |
+          cd dist/artifacts
+
           if [[ "${{ github.ref_name }}" == *-rc* ]]; then
-            gh --repo "${{ github.repository }}" release create ${{ github.ref_name }} --verify-tag --generate-notes --prerelease
+            gh --repo "${{ github.repository }}" release create ${{ github.ref_name }} --verify-tag --generate-notes --prerelease remotedialer-proxy*.tgz
           else
-            gh --repo "${{ github.repository }}" release create ${{ github.ref_name }} --verify-tag --generate-notes
+            gh --repo "${{ github.repository }}" release create ${{ github.ref_name }} --verify-tag --generate-notes remotedialer-proxy*.tgz
           fi
   image:
     runs-on: ubuntu-latest
@@ -77,7 +103,7 @@ jobs:
           context: .
           file: ./Dockerfile.proxy
           platforms: "linux/${{ matrix.arch }}"
-          outputs: type=image,name=${{ env.REPO }}/remotedialier-proxy,push-by-digest=true,name-canonical=true,push=true
+          outputs: type=image,name=${{ env.REPO }}/remotedialer-proxy,push-by-digest=true,name-canonical=true,push=true
 
       - name: Export digest
         run: |
@@ -135,5 +161,5 @@ jobs:
       - name: Create manifest list and push
         working-directory: /tmp/digests
         run: |
-          docker buildx imagetools create -t ${{ env.REGISTRY }}/${{ env.REPO }}/remotedialier-proxy:${{ env.TAG_NAME }} \
-            $(printf '${{ env.REPO }}/remotedialier-proxy@sha256:%s ' *)
+          docker buildx imagetools create -t ${{ env.REGISTRY }}/${{ env.REPO }}/remotedialer-proxy:${{ env.TAG_NAME }} \
+            $(printf '${{ env.REPO }}/remotedialer-proxy@sha256:%s ' *)
