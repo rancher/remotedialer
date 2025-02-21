@@ -25,8 +25,8 @@ var (
 	certSecretName        = "api-extension-ca-name"
 	certServerName        = "api-extension-tls-name"
 	connectSecret         = "api-extension"
-	ports                 = []string{"5555:8443"}
-	fakeImperativeAPIAddr = "0.0.0.0:8888"
+	ports                 = []string{"5555:5555"}
+	fakeImperativeAPIAddr = "0.0.0.0:6666"
 )
 
 func init() {
@@ -158,10 +158,6 @@ func main() {
 		logrus.Fatal(err)
 	}
 
-	if err := coreFactory.Start(ctx, 1); err != nil {
-		logrus.Fatal(err)
-	}
-
 	podClient := coreFactory.Core().V1().Pod()
 	secretContoller := coreFactory.Core().V1().Secret()
 
@@ -183,14 +179,16 @@ func main() {
 		logrus.Fatal(err)
 	}
 
-	go func() {
-		logrus.Info("RDP Client Started... Waiting for CTRL+C")
-		<-sigChan
-		logrus.Info("Stopping...")
-
-		cancel()
-		proxyClient.Stop()
-	}()
+	if err := coreFactory.Start(ctx, 1); err != nil {
+		logrus.Fatal(err)
+	}
 
 	proxyClient.Run(ctx)
+
+	logrus.Info("RDP Client Started... Waiting for CTRL+C")
+	<-sigChan
+	logrus.Info("Stopping...")
+
+	cancel()
+	proxyClient.Stop()
 }
