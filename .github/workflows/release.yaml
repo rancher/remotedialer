@@ -29,10 +29,13 @@ jobs:
 
       - name: Create helm tarball
         env:
-          HELM_CHART_VERSION: "${{ github.ref_name }}"
+          HELM_TAG: "${{ github.ref_name }}"
         run: |
           mkdir -p build dist/artifacts
           cp -rf charts build/
+
+          # Remove prefix `v` because it's not needed
+          HELM_CHART_VERSION=$(echo "$HELM_TAG" | sed 's|^v||')
 
           sed -i \
               -e 's/^version:.*/version: '${HELM_CHART_VERSION}'/' \
@@ -40,7 +43,7 @@ jobs:
               build/charts/remotedialer-proxy/Chart.yaml
 
           sed -i \
-              -e 's/tag:.*/tag: '${HELM_CHART_VERSION}'/' \
+              -e 's/tag:.*/tag: '${HELM_TAG}'/' \
               build/charts/remotedialer-proxy/values.yaml
 
           helm package -d ./dist/artifacts ./build/charts/remotedialer-proxy
