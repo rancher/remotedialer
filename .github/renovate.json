@@ -5,5 +5,15 @@
   "baseBranches": [
     "main", "release/v0.3"
   ],
-  "prHourlyLimit": 2
+  "prHourlyLimit": 2,
+  "packageRules": [
+    {
+      "matchPackagePatterns": [
+        "k8s.io/*",
+        "sigs.k8s.io/*",
+        "github.com/prometheus/*"
+      ],
+      "enabled": false
+    }
+  ] 
 }
