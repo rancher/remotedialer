@@ -130,7 +130,7 @@ jobs:
     needs: image
     steps:
       - name: Download digests
-        uses: actions/download-artifact@65a9edc5881444af0b9093a5e628f2fe47ea3b2e # v4.1.7
+        uses: actions/download-artifact@cc203385981b70ca67e1cc392babf9cc229d5806 # v4.1.9
         # https://github.com/actions/download-artifact/releases/tag/v4.1.7
         with:
           path: /tmp/digests
