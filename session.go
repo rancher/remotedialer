@@ -178,7 +178,18 @@ func (s *Session) startPings(rootCtx context.Context) {
 				if err := s.sendPing(); err != nil {
 					logrus.WithError(err).Error("Error writing ping")
 				}
-				logrus.Debug("Wrote ping")
+				v := ctx.Value("caller")
+				s := ""
+				if v != nil {
+					s1, ok := v.(string)
+					if ok {
+						s = s1
+					}
+				}
+				if s == "" {
+					s = "<unknown context>"
+				}
+				logrus.Tracef("[%s] Wrote ping", s)
 			}
 		}
 	}()
