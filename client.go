@@ -64,7 +64,7 @@ func ConnectToProxyWithDialer(rootCtx context.Context, proxyURL string, headers 
 
 	ctx, cancel := context.WithCancel(rootCtx)
 	defer cancel()
-	ctx = context.WithValue(ctx, "caller", fmt.Sprintf("ConnectToProxy: url: %s", proxyURL))
+	ctx = context.WithValue(ctx, ContextKeyCaller, fmt.Sprintf("ConnectToProxy: url: %s", proxyURL))
 
 	session := NewClientSessionWithDialer(auth, ws, localDialer)
 	defer session.Close()
