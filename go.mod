@@ -7,7 +7,7 @@ require (
 	github.com/gorilla/websocket v1.5.4-0.20250319132907-e064f32e3674
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.22.0
-	github.com/rancher/dynamiclistener v0.6.3-rc1
+	github.com/rancher/dynamiclistener v0.7.0-rc1
 	github.com/rancher/wrangler/v3 v3.2.2-rc.1
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.10.0
