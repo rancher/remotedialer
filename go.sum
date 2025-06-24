@@ -82,8 +82,8 @@ github.com/prometheus/common v0.62.0 h1:xasJaQlnWAeyHdUBeGjXmutelfJHWMRr+Fg4QszZ
 github.com/prometheus/common v0.62.0/go.mod h1:vyBcEuLSvWos9B1+CyL7JZ2up+uFzXhkqml0W5zIY1I=
 github.com/prometheus/procfs v0.15.1 h1:YagwOFzUgYfKKHX6Dr+sHT7km/hxC76UB0learggepc=
 github.com/prometheus/procfs v0.15.1/go.mod h1:fB45yRUv8NstnjriLhBQLuOUt+WW4BsoGhij/e3PBqk=
-github.com/rancher/dynamiclistener v0.7.0-rc1 h1:7IDfKnS/14XvpkiP64++y9CBy525UDuOWfm49hOZ6+k=
-github.com/rancher/dynamiclistener v0.7.0-rc1/go.mod h1:Q2YA42xp7Xc69JiSlJ8GpvLvze261T0iQ/TP4RdMCYk=
+github.com/rancher/dynamiclistener v0.7.0 h1:+jyfZ4lVamc1UbKWo8V8dhSPtCgRZYaY8nm7wiHeko4=
+github.com/rancher/dynamiclistener v0.7.0/go.mod h1:Q2YA42xp7Xc69JiSlJ8GpvLvze261T0iQ/TP4RdMCYk=
 github.com/rancher/lasso v0.2.3-rc3 h1:kkYnARdFeY6A9E2XnjfQbG8CssHQwobPMIFqPRGpVxc=
 github.com/rancher/lasso v0.2.3-rc3/go.mod h1:G+KeeOaKRjp+qGp0bV6VbLhYrq1vHbJPbDh40ejg5yE=
 github.com/rancher/wrangler/v3 v3.2.2-rc.3 h1:ObcqAxQkQFP6r1YI3zJhi9v9PE+UUNNZpelz6NSpQnc=
