@@ -15,6 +15,7 @@ type Config struct {
 	ProxyPort       int    // tcp remotedialer-proxy port
 	PeerPort        int    // cluster-external service port
 	HTTPSPort       int    // https remotedialer-proxy port
+	Debug           bool
 }
 
 func requiredString(key string) (string, error) {
@@ -65,6 +66,7 @@ func ConfigFromEnvironment() (*Config, error) {
 	if config.HTTPSPort, err = requiredPort("HTTPS_PORT"); err != nil {
 		return nil, err
 	}
+	config.Debug = len(os.Getenv("DEBUG")) > 0
 
 	return &config, nil
 }

@@ -91,7 +91,9 @@ func pipe(a, b net.Conn) {
 }
 
 func Start(cfg *Config, restConfig *rest.Config) error {
-	logrus.SetLevel(logrus.DebugLevel)
+	if cfg.Debug {
+		logrus.SetLevel(logrus.DebugLevel)
+	}
 	ctx := context.Background()
 
 	// Setting Up Default Authorizer
