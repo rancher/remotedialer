@@ -3,6 +3,7 @@ package remotedialer
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"time"
@@ -56,6 +57,7 @@ func ConnectToProxy(rootCtx context.Context, proxyURL string, headers http.Heade
 
 	ctx, cancel := context.WithCancel(rootCtx)
 	defer cancel()
+	ctx = context.WithValue(ctx, ContextKeyCaller, fmt.Sprintf("ConnectToProxy: url: %s", proxyURL))
 
 	session := NewClientSession(auth, ws)
 	defer session.Close()
