@@ -33,6 +33,22 @@ type Session struct {
 	client           bool
 }
 
+// Use this defined type so we can share context between remotedialer and its clients
+type ContextKey struct{}
+
+var ContextKeyCaller = ContextKey{}
+
+func ValueFromContext(ctx context.Context) string {
+	v := ctx.Value(ContextKeyCaller)
+	if v == nil {
+		return ""
+	}
+	if s, ok := v.(string); ok {
+		return s
+	}
+	return ""
+}
+
 // PrintTunnelData No tunnel logging by default
 var PrintTunnelData bool
 
@@ -88,7 +104,11 @@ func (s *Session) startPings(rootCtx context.Context) {
 				if err := s.conn.conn.WriteControl(websocket.PingMessage, []byte(""), time.Now().Add(PingWaitDuration)); err != nil {
 					logrus.WithError(err).Error("Error writing ping")
 				}
-				logrus.Debug("Wrote ping")
+				s := ValueFromContext(ctx)
+				if s == "" {
+					s = "<unknown context>"
+				}
+				logrus.Tracef("[%s] Wrote ping", s)
 				s.conn.Unlock()
 			}
 		}
