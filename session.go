@@ -104,11 +104,11 @@ func (s *Session) startPings(rootCtx context.Context) {
 				if err := s.conn.conn.WriteControl(websocket.PingMessage, []byte(""), time.Now().Add(PingWaitDuration)); err != nil {
 					logrus.WithError(err).Error("Error writing ping")
 				}
-				s := ValueFromContext(ctx)
-				if s == "" {
-					s = "<unknown context>"
+				tag := ValueFromContext(ctx)
+				if tag == "" {
+					tag = "<unknown context>"
 				}
-				logrus.Tracef("[%s] Wrote ping", s)
+				logrus.Tracef("[%s] Wrote ping", tag)
 				s.conn.Unlock()
 			}
 		}
