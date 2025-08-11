@@ -1,0 +1,97 @@
+name: Bump remotedialer in rancher/charts
+on:
+  workflow_dispatch:
+    inputs:
+      charts_ref:
+        description: "Submit PR against the following rancher/charts branch (eg: dev-v2.10)"
+        required: true
+        default: "dev-v2.13"
+      prev_remotedialer:
+        description: "Previous Remotedialer version (eg: v0.9.0-rc.13)"
+        required: true
+        default: ""
+      new_remotedialer:
+        description: "New Remotedialer version (eg: v0.9.0-rc.14)"
+        required: true
+        default: ""
+
+env:
+  CHARTS_REF: ${{ github.event.inputs.charts_ref }}
+  REMOTEDIALER_REF: "${{ github.ref_name }}"
+  PREV_REMOTEDIALER: ${{ github.event.inputs.prev_remotedialer }}
+  NEW_REMOTEDIALER: ${{ github.event.inputs.new_remotedialer }}
+
+jobs:
+  create-charts-pr:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # Required for vault
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: "${{ env.REMOTEDIALER_REF }}"
+          path: remotedialer
+
+      - uses: rancher-eio/read-vault-secrets@main
+        with:
+          secrets: |
+            secret/data/github/repo/${{ github.repository }}/github/app-credentials appId | APP_ID ;
+            secret/data/github/repo/${{ github.repository }}/github/app-credentials privateKey | PRIVATE_KEY
+
+      # Fetch github token just for the charts repository
+      - uses: actions/create-github-app-token@v1
+        id: app-token
+        with:
+          app-id: ${{ env.APP_ID }}
+          private-key: ${{ env.PRIVATE_KEY }}
+          repositories: |
+            charts
+
+      - name: Checkout charts repository
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/charts
+          ref: "${{ env.CHARTS_REF }}"
+          token: ${{ steps.app-token.outputs.token }}
+          path: charts
+          # Allow making git push request later on
+          persist-credentials: true
+
+      - name: Configure the committer
+        run: |
+          cd charts
+          user_id=$(gh api "/users/$APP_USER" --jq .id)
+          git config --global user.name "$APP_USER"
+          git config --global user.email "${user_id}+${APP_USER}@users.noreply.github.com"
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          APP_USER: "${{ steps.app-token.outputs.app-slug }}[bot]"
+
+      - name: Install dependencies
+        run: sudo snap install yq --channel=v4/stable
+
+      - name: Run release script
+        run: |
+          cd charts
+          BRANCH="bump-remotedialer-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          echo "BRANCH=${BRANCH}" >> $GITHUB_ENV
+          git checkout -b "$BRANCH" "$CHARTS_REF"
+          ../remotedialer/.github/workflows/scripts/release-against-charts.sh . "$PREV_REMOTEDIALER" "$NEW_REMOTEDIALER"
+
+      - name: Push and create pull request
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          cd charts
+          git push origin "$BRANCH"
+
+          body=$(../remotedialer/.github/workflows/scripts/release-message.sh "$PREV_REMOTEDIALER" "$NEW_REMOTEDIALER")
+
+          gh pr create \
+            --title "[$CHARTS_REF] Bump remotedialer to $NEW_REMOTEDIALER" \
+            --body "$body" \
+            --repo ${{ github.repository_owner }}/charts \
+            --head "${{ github.repository_owner }}:$BRANCH" \
+            --base "$CHARTS_REF"

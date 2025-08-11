@@ -1,0 +1,127 @@
+name: Bump remotedialer in rancher/rancher
+on:
+  workflow_dispatch:
+    inputs:
+      rancher_ref:
+        description: "Submit PR against the following rancher/rancher branch (eg: main)"
+        required: true
+        default: "main"
+      prev_remotedialer:
+        description: "Previous Remotedialer version (eg: v0.5.0-rc.13)"
+        required: true
+        default: ""
+      new_remotedialer:
+        description: "New Remotedialer version (eg: v0.5.0-rc.14)"
+        required: true
+        default: ""
+
+env:
+  RANCHER_REF: ${{ github.event.inputs.rancher_ref }}
+  REMOTEDIALER_REF: "${{ github.ref_name }}"
+  PREV_REMOTEDIALER: ${{ github.event.inputs.prev_remotedialer }}
+  NEW_REMOTEDIALER: ${{ github.event.inputs.new_remotedialer }}
+
+jobs:
+  create-rancher-pr:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # Required for vault
+      id-token: write
+    steps:
+      - name: Install dependencies
+        run: sudo snap install yq --channel=v4/stable
+
+      - uses: actions/checkout@v4
+        with:
+          ref: "${{ env.REMOTEDIALER_REF }}"
+          path: remotedialer
+
+      - uses: rancher-eio/read-vault-secrets@main
+        with:
+          secrets: |
+            secret/data/github/repo/${{ github.repository }}/github/app-credentials appId | APP_ID ;
+            secret/data/github/repo/${{ github.repository }}/github/app-credentials privateKey | PRIVATE_KEY
+
+      # Fetch github token just for the rancher repository
+      - uses: actions/create-github-app-token@v1
+        id: app-token
+        with:
+          app-id: ${{ env.APP_ID }}
+          private-key: ${{ env.PRIVATE_KEY }}
+          repositories: |
+            rancher
+
+      - name: Checkout rancher repository
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/rancher
+          ref: "${{ env.RANCHER_REF }}"
+          token: ${{ steps.app-token.outputs.token }}
+          path: rancher
+          # Allow making git push request later on
+          persist-credentials: true
+
+      - name: Find charts branch
+        id: find_charts_branch
+        run: |
+          cd rancher
+          # Extract dev-v2.9 out of the following line:
+          #     ChartDefaultBranch                  = NewSetting("chart-default-branch", "dev-v2.9")
+          charts_branch=$(grep '"chart-default-branch"' pkg/settings/setting.go | cut -d'"' -f4)
+          echo "charts_branch=$charts_branch" >> $GITHUB_OUTPUT
+
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/charts
+          ref: "${{ steps.find_charts_branch.outputs.charts_branch }}"
+          path: charts
+
+      # Prevents the Rancher CI to continuously fail while the remotedialer RC is not
+      # yet added to charts' index.yaml file due to caching.
+      - name: Verify RC exists
+        env:
+          CHARTS_BRANCH: "${{ steps.find_charts_branch.outputs.charts_branch }}"
+        run: |
+          cd charts
+          new_remotedialer_short=$(echo "$NEW_REMOTEDIALER" | sed 's|^v||')  # e.g. 0.5.2-rc.3
+          # Empty output if the version is not found, otherwise the version will be outputed.
+          found=$(yq ".entries.remotedialer-proxy[].version | select(. == \"*$new_remotedialer_short\")" index.yaml)
+          if [ -z "$found" ]; then
+            echo "remotedialer RC version $NEW_REMOTEDIALER not found in charts (branch=$CHARTS_BRANCH). Aborting."
+            exit 1
+          fi
+
+      - name: Configure the committer
+        run: |
+          cd rancher
+          user_id=$(gh api "/users/$APP_USER" --jq .id)
+          git config --global user.name "$APP_USER"
+          git config --global user.email "${user_id}+${APP_USER}@users.noreply.github.com"
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          APP_USER: "${{ steps.app-token.outputs.app-slug }}[bot]"
+
+      - name: Run release script
+        run: |
+          cd rancher
+          BRANCH="bump-remotedialer-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          echo "BRANCH=${BRANCH}" >> $GITHUB_ENV
+          git checkout -b "$BRANCH" "$RANCHER_REF"
+          ../remotedialer/.github/workflows/scripts/release-against-rancher.sh . "$NEW_REMOTEDIALER"
+
+      - name: Push and create pull request
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          cd rancher
+          git push origin $BRANCH
+
+          body=$(../remotedialer/.github/workflows/scripts/release-message.sh "$PREV_REMOTEDIALER" "$NEW_REMOTEDIALER")
+
+          gh pr create \
+            --title "[$RANCHER_REF] Bump remotedialer to $NEW_REMOTEDIALER" \
+            --body "$body" \
+            --repo ${{ github.repository_owner }}/rancher \
+            --head "${{ github.repository_owner }}:$BRANCH" \
+            --base "$RANCHER_REF"
