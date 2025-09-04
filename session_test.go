@@ -1,6 +1,7 @@
 package remotedialer
 
 import (
+	"context"
 	"math/rand"
 	"reflect"
 	"sync"
@@ -156,5 +157,38 @@ func TestSession_sendPings(t *testing.T) {
 		case <-time.After(5 * time.Second):
 			t.Errorf("ping %d not received in time", i)
 		}
+	}
+}
+
+// This test is to ensure that there is no deadlock if Close()
+// is called while startPings goroutine is running. We are not
+// calling startPings directly, but simulating its state where the
+// deadlock could occur.
+func TestSession_CloseDeadlock(t *testing.T) {
+	t.Parallel()
+
+	s := setupDummySession(t, 0)
+
+	_, s.pingCancel = context.WithCancel(context.Background())
+	s.pingWait.Add(1)
+
+	go func() {
+		s.Close()
+	}()
+
+	time.Sleep(1 * time.Second)
+	done := make(chan struct{})
+	go func() {
+		s.Lock()
+		s.pingWait.Done()
+		s.Unlock()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		// Close returned. Test passed.
+	case <-time.After(2 * time.Second):
+		t.Fatal("Close() did not return within 2s, possible deadlock")
 	}
 }
