@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"net/http"
+	"time"
 
 	"github.com/rancher/remotedialer"
 	"github.com/sirupsen/logrus"
@@ -29,5 +30,9 @@ func main() {
 		"X-Tunnel-ID": []string{id},
 	}
 
-	remotedialer.ClientConnect(context.Background(), addr, headers, nil, func(string, string) bool { return true }, nil)
+	for {
+		remotedialer.ClientConnect(context.Background(), addr, headers, nil, func(string, string) bool { return true }, nil)
+		logrus.Info("Reconnecting in 5 seconds...")
+		<-time.After(5 * time.Second)
+	}
 }
