@@ -7,14 +7,13 @@ import (
 	"net"
 	"sync"
 
-	"github.com/gorilla/websocket"
-
+	"github.com/coder/websocket"
 	"github.com/rancher/remotedialer/metrics"
 )
 
 type sessionListener interface {
-	sessionAdded(clientKey string, sessionKey int64)
-	sessionRemoved(clientKey string, sessionKey int64)
+	sessionAdded(ctx context.Context, clientKey string, sessionKey int64)
+	sessionRemoved(ctx context.Context, clientKey string, sessionKey int64)
 }
 
 type sessionManager struct {
@@ -56,13 +55,13 @@ func (sm *sessionManager) addListener(listener sessionListener) {
 
 	for k, sessions := range sm.clients {
 		for _, session := range sessions {
-			listener.sessionAdded(k, session.sessionKey)
+			listener.sessionAdded(context.Background(), k, session.sessionKey)
 		}
 	}
 
 	for k, sessions := range sm.peers {
 		for _, session := range sessions {
-			listener.sessionAdded(k, session.sessionKey)
+			listener.sessionAdded(context.Background(), k, session.sessionKey)
 		}
 	}
 }
@@ -100,7 +99,7 @@ func (sm *sessionManager) getDialer(clientKey string) (Dialer, error) {
 
 func (sm *sessionManager) add(clientKey string, conn *websocket.Conn, peer bool) *Session {
 	sessionKey := rand.Int63()
-	session := newSession(sessionKey, clientKey, newWSConn(conn))
+	session := newSession(sessionKey, clientKey, conn)
 
 	sm.Lock()
 	defer sm.Unlock()
@@ -113,7 +112,7 @@ func (sm *sessionManager) add(clientKey string, conn *websocket.Conn, peer bool)
 	metrics.IncSMTotalAddWS(clientKey, peer)
 
 	for l := range sm.listeners {
-		l.sessionAdded(clientKey, session.sessionKey)
+		l.sessionAdded(context.Background(), clientKey, session.sessionKey)
 	}
 
 	return session
@@ -148,7 +147,7 @@ func (sm *sessionManager) remove(s *Session) {
 	}
 
 	for l := range sm.listeners {
-		l.sessionRemoved(s.clientKey, s.sessionKey)
+		l.sessionRemoved(context.Background(), s.clientKey, s.sessionKey)
 	}
 
 	s.Close()

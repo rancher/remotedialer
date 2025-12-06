@@ -11,6 +11,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/coder/websocket"
 )
 
 func TestSession_clientConnect(t *testing.T) {
@@ -69,11 +71,11 @@ func TestSession_addRemoveRemoteClient(t *testing.T) {
 func TestSession_connectionData(t *testing.T) {
 	s := setupDummySession(t, 0)
 	connID := getDummyConnectionID()
-	conn := newConnection(connID, s, "test", "test")
+	conn := newConnection(context.Background(), connID, s, "test", "test")
 	s.addConnection(connID, conn)
 
 	data := "testing!"
-	s.connectionData(connID, strings.NewReader(data))
+	s.connectionData(context.Background(), connID, strings.NewReader(data))
 
 	if got, want := conn.buffer.offerCount, int64(len(data)); got != want {
 		t.Errorf("incorrect data length, got %d, want %d", got, want)
@@ -91,7 +93,7 @@ func TestSession_connectionData(t *testing.T) {
 func TestSession_pauseResumeConnection(t *testing.T) {
 	s := setupDummySession(t, 0)
 	connID := getDummyConnectionID()
-	conn := newConnection(connID, s, "test", "test")
+	conn := newConnection(context.Background(), connID, s, "test", "test")
 	s.addConnection(connID, conn)
 
 	s.pauseConnection(connID)
@@ -109,16 +111,16 @@ func TestSession_closeConnection(t *testing.T) {
 	s := setupDummySession(t, 0)
 	var msg *message
 	s.conn = &fakeWSConn{
-		writeMessageCallback: func(msgType int, deadline time.Time, data []byte) (err error) {
-			if !deadline.IsZero() && deadline.Before(time.Now()) {
-				return errors.New("deadline exceeded")
+		writeCallback: func(ctx context.Context, typ websocket.MessageType, data []byte) (err error) {
+			if ctx.Err() != nil {
+				return errors.New("context cancelled")
 			}
 			msg, err = newServerMessage(bytes.NewReader(data))
 			return
 		},
 	}
 	connID := getDummyConnectionID()
-	conn := newConnection(connID, s, "test", "test")
+	conn := newConnection(context.Background(), connID, s, "test", "test")
 	s.addConnection(connID, conn)
 
 	// Ensure Error message is sent regardless of the WriteDeadline value, see https://github.com/rancher/remotedialer/pull/79

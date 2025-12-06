@@ -30,7 +30,7 @@ func (s *Session) serveMessage(ctx context.Context, reader io.Reader) error {
 	case SyncConnections:
 		return s.syncConnections(message.body)
 	case Data:
-		s.connectionData(message.connID, message.body)
+		s.connectionData(ctx, message.connID, message.body)
 	case Pause:
 		s.pauseConnection(message.connID)
 	case Resume:
@@ -47,7 +47,7 @@ func (s *Session) clientConnect(ctx context.Context, message *message) error {
 		return errors.New("connect not allowed")
 	}
 
-	conn := newConnection(message.connID, s, message.proto, message.address)
+	conn := newConnection(ctx, message.connID, s, message.proto, message.address)
 	s.addConnection(message.connID, conn)
 
 	go clientDial(ctx, s.dialer, conn, message)
@@ -113,11 +113,21 @@ func (s *Session) closeConnection(connID int64, err error) {
 }
 
 // connectionData process incoming data from connection by reading the body into an internal readBuffer
-func (s *Session) connectionData(connID int64, body io.Reader) {
+func (s *Session) connectionData(ctx context.Context, connID int64, body io.Reader) {
 	conn := s.getConnection(connID)
 	if conn == nil {
 		errMsg := newErrorMessage(connID, fmt.Errorf("connection not found %s/%d/%d", s.clientKey, s.sessionKey, connID))
-		_, _ = errMsg.WriteTo(defaultDeadline(), s.conn)
+		deadline := defaultDeadline()
+		writeCtx := ctx
+		if writeCtx == nil {
+			writeCtx = context.Background()
+		}
+		if !deadline.IsZero() {
+			var cancel context.CancelFunc
+			writeCtx, cancel = context.WithDeadline(writeCtx, deadline)
+			defer cancel()
+		}
+		_, _ = errMsg.WriteTo(writeCtx, s.conn)
 		return
 	}
 

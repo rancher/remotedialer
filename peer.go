@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gorilla/websocket"
+	"github.com/coder/websocket"
 	"github.com/rancher/remotedialer/metrics"
 	"github.com/sirupsen/logrus"
 )
@@ -76,12 +76,6 @@ func (p *peer) start(ctx context.Context, s *Server) {
 		Token: {s.PeerToken},
 	}
 
-	dialer := &websocket.Dialer{
-		TLSClientConfig: &tls.Config{
-			InsecureSkipVerify: true,
-		},
-		HandshakeTimeout: HandshakeTimeOut,
-	}
 	ctx = context.WithValue(ctx, ContextKeyCaller, fmt.Sprintf("Peer url:%s, id:%s", p.url, p.id))
 
 outer:
@@ -93,7 +87,23 @@ outer:
 		}
 
 		metrics.IncSMTotalAddPeerAttempt(p.id)
-		ws, _, err := dialer.Dial(p.url, headers)
+
+		opts := &websocket.DialOptions{
+			HTTPHeader: headers,
+			HTTPClient: &http.Client{
+				Timeout: HandshakeTimeOut,
+				Transport: &http.Transport{
+					TLSClientConfig: &tls.Config{
+						InsecureSkipVerify: true,
+					},
+					DialContext: (&net.Dialer{
+						Timeout: HandshakeTimeOut,
+					}).DialContext,
+				},
+			},
+		}
+
+		ws, _, err := websocket.Dial(ctx, p.url, opts)
 		if err != nil {
 			logrus.Errorf("Failed to connect to peer %s [local ID=%s]: %v", p.url, s.PeerID, err)
 			time.Sleep(5 * time.Second)
@@ -120,7 +130,7 @@ outer:
 			logrus.Errorf("Failed to serve peer connection %s: %v", p.id, err)
 		}
 
-		ws.Close()
+		ws.Close(websocket.StatusNormalClosure, "")
 		time.Sleep(5 * time.Second)
 	}
 }

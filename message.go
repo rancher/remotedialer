@@ -2,17 +2,17 @@ package remotedialer
 
 import (
 	"bufio"
+	"context"
 	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"math/rand"
 	"strings"
 	"sync/atomic"
 	"time"
 
-	"github.com/gorilla/websocket"
+	"github.com/coder/websocket"
 )
 
 const (
@@ -162,7 +162,7 @@ func newServerMessage(reader io.Reader) (*message, error) {
 	}
 
 	if m.messageType == Connect {
-		bytes, err := ioutil.ReadAll(io.LimitReader(buf, 266))
+		bytes, err := io.ReadAll(io.LimitReader(buf, 266))
 		if err != nil {
 			return nil, err
 		}
@@ -174,7 +174,7 @@ func newServerMessage(reader io.Reader) (*message, error) {
 		m.address = parts[1]
 		m.bytes = bytes
 	} else if m.messageType == AddClient || m.messageType == RemoveClient {
-		bytes, err := ioutil.ReadAll(io.LimitReader(buf, 100))
+		bytes, err := io.ReadAll(io.LimitReader(buf, 100))
 		if err != nil {
 			return nil, err
 		}
@@ -189,7 +189,7 @@ func (m *message) Err() error {
 	if m.err != nil {
 		return m.err
 	}
-	bytes, err := ioutil.ReadAll(io.LimitReader(m.body, 100))
+	bytes, err := io.ReadAll(io.LimitReader(m.body, 100))
 	if err != nil {
 		return err
 	}
@@ -223,8 +223,8 @@ func (m *message) Read(p []byte) (int, error) {
 	return m.body.Read(p)
 }
 
-func (m *message) WriteTo(deadline time.Time, wsConn wsConn) (int, error) {
-	err := wsConn.WriteMessage(websocket.BinaryMessage, deadline, m.Bytes())
+func (m *message) WriteTo(ctx context.Context, conn websocketConn) (int, error) {
+	err := conn.Write(ctx, websocket.MessageBinary, m.Bytes())
 	return len(m.bytes), err
 }
 

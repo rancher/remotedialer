@@ -16,12 +16,12 @@ func clientDial(ctx context.Context, dialer Dialer, conn *connection, message *m
 		err     error
 	)
 
-	ctx, cancel := context.WithDeadline(ctx, time.Now().Add(time.Minute))
+	dialCtx, cancel := context.WithDeadline(ctx, time.Now().Add(time.Minute))
 	if dialer == nil {
 		d := net.Dialer{}
-		netConn, err = d.DialContext(ctx, message.proto, message.address)
+		netConn, err = d.DialContext(dialCtx, message.proto, message.address)
 	} else {
-		netConn, err = dialer(ctx, message.proto, message.address)
+		netConn, err = dialer(dialCtx, message.proto, message.address)
 	}
 	cancel()
 
@@ -31,7 +31,11 @@ func clientDial(ctx context.Context, dialer Dialer, conn *connection, message *m
 	}
 	defer netConn.Close()
 
-	pipe(conn, netConn)
+	// Wrap the external connection with context awareness
+	// This ensures io.Copy operations will unblock immediately when ctx is cancelled
+	ctxConn := newContextConn(ctx, netConn)
+
+	pipe(conn, ctxConn)
 }
 
 func pipe(client *connection, server net.Conn) {
