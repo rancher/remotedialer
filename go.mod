@@ -3,8 +3,8 @@ module github.com/rancher/remotedialer
 go 1.24.0
 
 require (
+	github.com/coder/websocket v1.8.14
 	github.com/gorilla/mux v1.8.1
-	github.com/gorilla/websocket v1.5.4-0.20250319132907-e064f32e3674
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.22.0
 	github.com/sirupsen/logrus v1.9.3
@@ -22,7 +22,6 @@ require (
 	github.com/prometheus/common v0.62.0 // indirect
 	github.com/prometheus/procfs v0.15.1 // indirect
 	github.com/rogpeppe/go-internal v1.13.1 // indirect
-	golang.org/x/net v0.38.0 // indirect
 	golang.org/x/sys v0.31.0 // indirect
 	google.golang.org/protobuf v1.36.5 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect

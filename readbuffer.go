@@ -2,7 +2,7 @@ package remotedialer
 
 import (
 	"bytes"
-	"errors"
+	"context"
 	"fmt"
 	"io"
 	"sync"
@@ -22,12 +22,14 @@ type readBuffer struct {
 	buf                       bytes.Buffer
 	err                       error
 	backPressure              *backPressure
+	done                      chan struct{}
 }
 
 func newReadBuffer(id int64, backPressure *backPressure) *readBuffer {
 	return &readBuffer{
 		id:           id,
 		backPressure: backPressure,
+		done:         make(chan struct{}),
 		cond: sync.Cond{
 			L: &sync.Mutex{},
 		},
@@ -67,7 +69,7 @@ func (r *readBuffer) Offer(reader io.Reader) error {
 	return nil
 }
 
-func (r *readBuffer) Read(b []byte) (int, error) {
+func (r *readBuffer) readWithContext(ctx context.Context, b []byte) (int, error) {
 	r.cond.L.Lock()
 	defer r.cond.L.Unlock()
 
@@ -97,22 +99,39 @@ func (r *readBuffer) Read(b []byte) (int, error) {
 			return 0, r.err
 		}
 
-		now := time.Now()
-		if !r.deadline.IsZero() {
-			if now.After(r.deadline) {
-				return 0, errors.New("deadline exceeded")
-			}
+		if ctx.Err() != nil {
+			return 0, ctx.Err()
 		}
 
-		var t *time.Timer
-		if !r.deadline.IsZero() {
-			t = time.AfterFunc(r.deadline.Sub(now), func() { r.cond.Broadcast() })
+		select {
+		case <-ctx.Done():
+			return 0, ctx.Err()
+		case <-r.done:
+			continue
+		default:
 		}
+
+		stop := context.AfterFunc(ctx, func() {
+			r.cond.Broadcast()
+		})
+
 		r.cond.Wait()
-		if t != nil {
-			t.Stop()
+		stop()
+
+		if ctx.Err() != nil {
+			return 0, ctx.Err()
 		}
 	}
+}
+
+func (r *readBuffer) Read(b []byte) (int, error) {
+	ctx := context.Background()
+	if !r.deadline.IsZero() {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithDeadline(ctx, r.deadline)
+		defer cancel()
+	}
+	return r.readWithContext(ctx, b)
 }
 
 func (r *readBuffer) Close(err error) error {
@@ -120,6 +139,7 @@ func (r *readBuffer) Close(err error) error {
 	defer r.cond.L.Unlock()
 	if r.err == nil {
 		r.err = err
+		close(r.done)
 	}
 	r.cond.Broadcast()
 	return nil

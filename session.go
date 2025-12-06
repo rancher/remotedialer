@@ -1,6 +1,7 @@
 package remotedialer
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -13,9 +14,17 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/gorilla/websocket"
+	"github.com/coder/websocket"
 	"github.com/sirupsen/logrus"
 )
+
+// websocketConn is a minimal interface for websocket connections
+type websocketConn interface {
+	Read(ctx context.Context) (websocket.MessageType, []byte, error)
+	Write(ctx context.Context, typ websocket.MessageType, p []byte) error
+	Close(code websocket.StatusCode, reason string) error
+	SetReadLimit(limit int64)
+}
 
 type Session struct {
 	sync.RWMutex
@@ -23,12 +32,12 @@ type Session struct {
 	nextConnID       int64
 	clientKey        string
 	sessionKey       int64
-	conn             wsConn
+	conn             websocketConn
 	conns            map[int64]*connection
 	remoteClientKeys map[string]map[int]bool
 	auth             ConnectAuthorizer
-	pingCancel       context.CancelFunc
-	pingWait         sync.WaitGroup
+	syncCancel       context.CancelFunc
+	syncWait         sync.WaitGroup
 	dialer           Dialer
 	client           bool
 }
@@ -63,9 +72,11 @@ func NewClientSession(auth ConnectAuthorizer, conn *websocket.Conn) *Session {
 }
 
 func NewClientSessionWithDialer(auth ConnectAuthorizer, conn *websocket.Conn, dialer Dialer) *Session {
+	// Set unlimited read limit to match gorilla/websocket behavior
+	conn.SetReadLimit(-1)
 	return &Session{
 		clientKey: "client",
-		conn:      newWSConn(conn),
+		conn:      conn,
 		conns:     map[int64]*connection{},
 		auth:      auth,
 		client:    true,
@@ -73,7 +84,12 @@ func NewClientSessionWithDialer(auth ConnectAuthorizer, conn *websocket.Conn, di
 	}
 }
 
-func newSession(sessionKey int64, clientKey string, conn wsConn) *Session {
+func newSession(sessionKey int64, clientKey string, conn *websocket.Conn) *Session {
+	// Set unlimited read limit to match gorilla/websocket behavior
+	// (skip if conn is nil, which only happens in tests)
+	if conn != nil {
+		conn.SetReadLimit(-1)
+	}
 	return &Session{
 		nextConnID:       1,
 		clientKey:        clientKey,
@@ -168,72 +184,55 @@ func (s *Session) getSessionKeys(clientKey string) map[int]bool {
 	return s.remoteClientKeys[clientKey]
 }
 
-func (s *Session) startPings(rootCtx context.Context) {
+func (s *Session) startPeriodicSync(rootCtx context.Context) {
 	ctx, cancel := context.WithCancel(rootCtx)
-	s.pingCancel = cancel
-	s.pingWait.Add(1)
+	s.syncCancel = cancel
+	s.syncWait.Add(1)
 
 	go func() {
-		defer s.pingWait.Done()
+		defer s.syncWait.Done()
 
-		t := time.NewTicker(PingWriteInterval)
-		defer t.Stop()
-
-		syncConnections := time.NewTicker(SyncConnectionsInterval)
-		defer syncConnections.Stop()
+		ticker := time.NewTicker(SyncConnectionsInterval)
+		defer ticker.Stop()
 
 		for {
 			select {
 			case <-ctx.Done():
 				return
-			case <-syncConnections.C:
+			case <-ticker.C:
 				if err := s.sendSyncConnections(); err != nil {
 					logrus.WithError(err).Error("Error syncing connections")
 				}
-			case <-t.C:
-				if err := s.sendPing(); err != nil {
-					logrus.WithError(err).Error("Error writing ping")
-				}
-				s := ValueFromContext(ctx)
-				if s == "" {
-					s = "<unknown context>"
-				}
-				logrus.Tracef("[%s] Wrote ping", s)
 			}
 		}
 	}()
 }
 
-// sendPing sends a Ping control message to the peer
-func (s *Session) sendPing() error {
-	return s.conn.WriteControl(websocket.PingMessage, time.Now().Add(PingWaitDuration), []byte(""))
-}
-
-func (s *Session) stopPings() {
-	if s.pingCancel == nil {
+func (s *Session) stopPeriodicSync() {
+	if s.syncCancel == nil {
 		return
 	}
 
-	s.pingCancel()
-	s.pingWait.Wait()
+	s.syncCancel()
+	s.syncWait.Wait()
 }
 
 func (s *Session) Serve(ctx context.Context) (int, error) {
 	if s.client {
-		s.startPings(ctx)
+		s.startPeriodicSync(ctx)
 	}
 
 	for {
-		msType, reader, err := s.conn.NextReader()
+		msgType, data, err := s.conn.Read(ctx)
 		if err != nil {
 			return 400, err
 		}
 
-		if msType != websocket.BinaryMessage {
+		if msgType != websocket.MessageBinary {
 			return 400, errWrongMessageType
 		}
 
-		if err := s.serveMessage(ctx, reader); err != nil {
+		if err := s.serveMessage(ctx, bytes.NewReader(data)); err != nil {
 			return 500, err
 		}
 	}
@@ -264,12 +263,12 @@ func (s *Session) Dial(ctx context.Context, proto, address string) (net.Conn, er
 func (s *Session) serverConnectContext(ctx context.Context, proto, address string) (net.Conn, error) {
 	deadline, ok := ctx.Deadline()
 	if ok {
-		return s.serverConnect(deadline, proto, address)
+		return s.serverConnect(ctx, deadline, proto, address)
 	}
 
 	result := make(chan connResult, 1)
 	go func() {
-		c, err := s.serverConnect(defaultDeadline(), proto, address)
+		c, err := s.serverConnect(ctx, defaultDeadline(), proto, address)
 		result <- connResult{conn: c, err: err}
 	}()
 
@@ -288,13 +287,22 @@ func (s *Session) serverConnectContext(ctx context.Context, proto, address strin
 	}
 }
 
-func (s *Session) serverConnect(deadline time.Time, proto, address string) (net.Conn, error) {
+func (s *Session) serverConnect(ctx context.Context, deadline time.Time, proto, address string) (net.Conn, error) {
 	connID := atomic.AddInt64(&s.nextConnID, 1)
-	conn := newConnection(connID, s, proto, address)
+	conn := newConnection(ctx, connID, s, proto, address)
 
 	s.addConnection(connID, conn)
 
-	_, err := s.writeMessage(deadline, newConnect(connID, proto, address))
+	writeCtx := ctx
+	if writeCtx == nil {
+		writeCtx = context.Background()
+	}
+	if !deadline.IsZero() {
+		var cancel context.CancelFunc
+		writeCtx, cancel = context.WithDeadline(writeCtx, deadline)
+		defer cancel()
+	}
+	_, err := s.writeMessage(writeCtx, newConnect(connID, proto, address))
 	if err != nil {
 		s.closeConnection(connID, err)
 		return nil, err
@@ -303,15 +311,15 @@ func (s *Session) serverConnect(deadline time.Time, proto, address string) (net.
 	return conn, err
 }
 
-func (s *Session) writeMessage(deadline time.Time, message *message) (int, error) {
+func (s *Session) writeMessage(ctx context.Context, message *message) (int, error) {
 	if PrintTunnelData {
 		logrus.Debug("WRITE ", message)
 	}
-	return message.WriteTo(deadline, s.conn)
+	return message.WriteTo(ctx, s.conn)
 }
 
 func (s *Session) Close() {
-	s.stopPings()
+	s.stopPeriodicSync()
 
 	s.Lock()
 	defer s.Unlock()
@@ -322,18 +330,24 @@ func (s *Session) Close() {
 	s.conns = map[int64]*connection{}
 }
 
-func (s *Session) sessionAdded(clientKey string, sessionKey int64) {
+func (s *Session) sessionAdded(ctx context.Context, clientKey string, sessionKey int64) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	client := fmt.Sprintf("%s/%d", clientKey, sessionKey)
-	_, err := s.writeMessage(time.Time{}, newAddClient(client))
+	_, err := s.writeMessage(ctx, newAddClient(client))
 	if err != nil {
-		s.conn.Close()
+		s.conn.Close(websocket.StatusInternalError, "failed to add client")
 	}
 }
 
-func (s *Session) sessionRemoved(clientKey string, sessionKey int64) {
+func (s *Session) sessionRemoved(ctx context.Context, clientKey string, sessionKey int64) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	client := fmt.Sprintf("%s/%d", clientKey, sessionKey)
-	_, err := s.writeMessage(time.Time{}, newRemoveClient(client))
+	_, err := s.writeMessage(ctx, newRemoveClient(client))
 	if err != nil {
-		s.conn.Close()
+		s.conn.Close(websocket.StatusInternalError, "failed to remove client")
 	}
 }

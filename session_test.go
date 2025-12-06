@@ -2,12 +2,15 @@ package remotedialer
 
 import (
 	"context"
+	"errors"
 	"math/rand"
 	"reflect"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/coder/websocket"
 )
 
 var dummyConnectionsNextID int64 = 1
@@ -20,6 +23,14 @@ func setupDummySession(t *testing.T, nConnections int) *Session {
 	t.Helper()
 
 	s := newSession(rand.Int63(), "", nil)
+	s.conn = &fakeWSConn{
+		writeCallback: func(ctx context.Context, typ websocket.MessageType, data []byte) (err error) {
+			if ctx.Err() != nil {
+				return errors.New("context canceled")
+			}
+			return nil
+		},
+	}
 
 	var wg sync.WaitGroup
 	ready := make(chan struct{})
@@ -123,54 +134,17 @@ func TestSession_activeConnectionIDs(t *testing.T) {
 	}
 }
 
-func TestSession_sendPings(t *testing.T) {
-	t.Parallel()
-
-	conn := testServerWS(t, nil)
-	session := newSession(rand.Int63(), "pings-test", newWSConn(conn))
-
-	pongHandler := conn.PongHandler()
-
-	pongs := make(chan struct{})
-	conn.SetPongHandler(func(appData string) error {
-		pongs <- struct{}{}
-		return pongHandler(appData)
-	})
-	go func() {
-		// Read channel must be consumed (even if discarded) for control messages to work:
-		// https://pkg.go.dev/github.com/gorilla/websocket#hdr-Control_Messages
-		for {
-			if _, _, err := conn.NextReader(); err != nil {
-				return
-			}
-		}
-	}()
-
-	for i := 1; i <= 4; i++ {
-		if err := session.sendPing(); err != nil {
-			t.Fatal(err)
-		}
-		select {
-		// pong received, ping was successful
-		case <-pongs:
-		// High timeout on purpose to avoid flakiness
-		case <-time.After(5 * time.Second):
-			t.Errorf("ping %d not received in time", i)
-		}
-	}
-}
-
 // This test is to ensure that there is no deadlock if Close()
-// is called while startPings goroutine is running. We are not
-// calling startPings directly, but simulating its state where the
+// is called while startPeriodicSync goroutine is running. We are not
+// calling startPeriodicSync directly, but simulating its state where the
 // deadlock could occur.
 func TestSession_CloseDeadlock(t *testing.T) {
 	t.Parallel()
 
 	s := setupDummySession(t, 0)
 
-	_, s.pingCancel = context.WithCancel(context.Background())
-	s.pingWait.Add(1)
+	_, s.syncCancel = context.WithCancel(context.Background())
+	s.syncWait.Add(1)
 
 	go func() {
 		s.Close()
@@ -180,7 +154,7 @@ func TestSession_CloseDeadlock(t *testing.T) {
 	done := make(chan struct{})
 	go func() {
 		s.Lock()
-		s.pingWait.Done()
+		s.syncWait.Done()
 		s.Unlock()
 		close(done)
 	}()

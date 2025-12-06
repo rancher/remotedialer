@@ -1,6 +1,7 @@
 package remotedialer
 
 import (
+	"context"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -41,7 +42,14 @@ func newSyncConnectionsMessage(connectionIDs []int64) *message {
 
 // sendSyncConnections sends a binary message of type SyncConnections, whose payload is a list of the active connection IDs for this session
 func (s *Session) sendSyncConnections() error {
-	_, err := s.writeMessage(time.Now().Add(SyncConnectionsTimeout), newSyncConnectionsMessage(s.activeConnectionIDs()))
+	deadline := time.Now().Add(SyncConnectionsTimeout)
+	ctx := context.Background()
+	if !deadline.IsZero() {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithDeadline(ctx, deadline)
+		defer cancel()
+	}
+	_, err := s.writeMessage(ctx, newSyncConnectionsMessage(s.activeConnectionIDs()))
 	return err
 }
 

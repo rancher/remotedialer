@@ -12,7 +12,7 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/gorilla/websocket"
+	"github.com/coder/websocket"
 )
 
 func Test_encodeConnectionIDs(t *testing.T) {
@@ -90,7 +90,7 @@ func TestSession_sendSyncConnections(t *testing.T) {
 
 	data := make(chan []byte)
 	conn := testServerWS(t, data)
-	session := newSession(rand.Int63(), "sync-test", newWSConn(conn))
+	session := newSession(rand.Int63(), "sync-test", conn)
 
 	for _, n := range []int{0, 5, 20} {
 		ids := generateIDs(n)
@@ -133,15 +133,15 @@ func generateIDs(n int) []int64 {
 func testServerWS(t *testing.T, data chan<- []byte) *websocket.Conn {
 	t.Helper()
 
-	var upgrader websocket.Upgrader
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		c, err := upgrader.Upgrade(w, r, nil)
+		c, err := websocket.Accept(w, r, nil)
 		if err != nil {
 			return
 		}
-		defer c.Close()
+		defer c.Close(websocket.StatusNormalClosure, "")
+		ctx := r.Context()
 		for {
-			_, message, err := c.ReadMessage()
+			_, message, err := c.Read(ctx)
 			if err != nil {
 				return
 			}
@@ -156,10 +156,10 @@ func testServerWS(t *testing.T, data chan<- []byte) *websocket.Conn {
 	t.Cleanup(cancel)
 
 	url := "ws" + server.URL[4:] // http:// -> ws://
-	conn, _, err := websocket.DefaultDialer.DialContext(ctx, url, nil)
+	conn, _, err := websocket.Dial(ctx, url, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = conn.Close() })
+	t.Cleanup(func() { _ = conn.Close(websocket.StatusNormalClosure, "") })
 	return conn
 }

@@ -66,12 +66,25 @@ func (b *backPressure) Resume() {
 	b.paused = false
 }
 
-func (b *backPressure) Wait(cancel context.CancelFunc) {
+func (b *backPressure) Wait(ctx context.Context, cancel context.CancelFunc) {
 	b.cond.L.Lock()
 	defer b.cond.L.Unlock()
 
 	for !b.closed && b.paused {
+		if ctx.Err() != nil {
+			return
+		}
+
+		stop := context.AfterFunc(ctx, func() {
+			b.cond.Broadcast()
+		})
+
 		b.cond.Wait()
+		stop()
 		cancel()
+
+		if ctx.Err() != nil {
+			return
+		}
 	}
 }

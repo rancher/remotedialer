@@ -3,9 +3,8 @@ package remotedialer
 import (
 	"net/http"
 	"sync"
-	"time"
 
-	"github.com/gorilla/websocket"
+	"github.com/coder/websocket"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
@@ -56,13 +55,7 @@ func (s *Server) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 
 	logrus.Infof("Handling backend connection request [%s]", clientKey)
 
-	upgrader := websocket.Upgrader{
-		HandshakeTimeout: 5 * time.Second,
-		CheckOrigin:      func(r *http.Request) bool { return true },
-		Error:            s.errorWriter,
-	}
-
-	wsConn, err := upgrader.Upgrade(rw, req, nil)
+	wsConn, err := websocket.Accept(rw, req, nil)
 	if err != nil {
 		s.errorWriter(rw, req, 400, errors.Wrapf(err, "Error during upgrade for host [%v]", clientKey))
 		return
