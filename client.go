@@ -4,11 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
+	"net"
 	"net/http"
 	"time"
 
-	"github.com/gorilla/websocket"
+	"github.com/coder/websocket"
 	"github.com/sirupsen/logrus"
 )
 
@@ -16,9 +17,9 @@ import (
 type ConnectAuthorizer func(proto, address string) bool
 
 // ClientConnect connect to WS and wait 5 seconds when error
-func ClientConnect(ctx context.Context, wsURL string, headers http.Header, dialer *websocket.Dialer,
+func ClientConnect(ctx context.Context, wsURL string, headers http.Header, dialOpts *websocket.DialOptions,
 	auth ConnectAuthorizer, onConnect func(context.Context, *Session) error) error {
-	if err := ConnectToProxy(ctx, wsURL, headers, auth, dialer, onConnect); err != nil {
+	if err := ConnectToProxy(ctx, wsURL, headers, auth, dialOpts, onConnect); err != nil {
 		if !errors.Is(err, context.Canceled) {
 			logrus.WithError(err).Error("Remotedialer proxy error")
 			time.Sleep(time.Duration(5) * time.Second)
@@ -30,26 +31,49 @@ func ClientConnect(ctx context.Context, wsURL string, headers http.Header, diale
 
 // ConnectToProxy connects to the websocket server.
 // Local connections on behalf of the remote host will be dialed using a default net.Dialer.
-func ConnectToProxy(rootCtx context.Context, proxyURL string, headers http.Header, auth ConnectAuthorizer, dialer *websocket.Dialer, onConnect func(context.Context, *Session) error) error {
-	return ConnectToProxyWithDialer(rootCtx, proxyURL, headers, auth, dialer, nil, onConnect)
+func ConnectToProxy(rootCtx context.Context, proxyURL string, headers http.Header, auth ConnectAuthorizer, dialOpts *websocket.DialOptions, onConnect func(context.Context, *Session) error) error {
+	return ConnectToProxyWithDialer(rootCtx, proxyURL, headers, auth, dialOpts, nil, onConnect)
 }
 
 // ConnectToProxyWithDialer connects to the websocket server.
 // Local connections on behalf of the remote host will be dialed using the provided Dialer function.
-func ConnectToProxyWithDialer(rootCtx context.Context, proxyURL string, headers http.Header, auth ConnectAuthorizer, dialer *websocket.Dialer, localDialer Dialer, onConnect func(context.Context, *Session) error) error {
+func ConnectToProxyWithDialer(rootCtx context.Context, proxyURL string, headers http.Header, auth ConnectAuthorizer, dialOpts *websocket.DialOptions, localDialer Dialer, onConnect func(context.Context, *Session) error) error {
 	logrus.WithField("url", proxyURL).Info("Connecting to proxy")
 
-	if dialer == nil {
-		dialer = &websocket.Dialer{Proxy: http.ProxyFromEnvironment, HandshakeTimeout: HandshakeTimeOut}
+	// If no dial options provided, create default with headers and proxy settings
+	if dialOpts == nil {
+		dialOpts = &websocket.DialOptions{
+			HTTPHeader: headers,
+			HTTPClient: &http.Client{
+				Timeout: HandshakeTimeOut,
+				Transport: &http.Transport{
+					Proxy: http.ProxyFromEnvironment,
+					DialContext: (&net.Dialer{
+						Timeout: HandshakeTimeOut,
+					}).DialContext,
+				},
+			},
+		}
+	} else if len(headers) > 0 {
+		// Merge headers (dialOpts take precedence)
+		if dialOpts.HTTPHeader == nil {
+			dialOpts.HTTPHeader = make(http.Header)
+		}
+		for key, values := range headers {
+			if _, exists := dialOpts.HTTPHeader[http.CanonicalHeaderKey(key)]; !exists {
+				dialOpts.HTTPHeader[http.CanonicalHeaderKey(key)] = values
+			}
+		}
 	}
-	ws, resp, err := dialer.DialContext(rootCtx, proxyURL, headers)
+
+	ws, resp, err := websocket.Dial(rootCtx, proxyURL, dialOpts)
 	if err != nil {
 		if resp == nil {
 			if !errors.Is(err, context.Canceled) {
 				logrus.WithError(err).Errorf("Failed to connect to proxy. Empty dialer response")
 			}
 		} else {
-			rb, err2 := ioutil.ReadAll(resp.Body)
+			rb, err2 := io.ReadAll(resp.Body)
 			if err2 != nil {
 				logrus.WithError(err).Errorf("Failed to connect to proxy. Response status: %v - %v. Couldn't read response body (err: %v)", resp.StatusCode, resp.Status, err2)
 			} else {
@@ -58,7 +82,7 @@ func ConnectToProxyWithDialer(rootCtx context.Context, proxyURL string, headers 
 		}
 		return err
 	}
-	defer ws.Close()
+	defer ws.Close(websocket.StatusNormalClosure, "")
 
 	result := make(chan error, 2)
 
