@@ -31,12 +31,16 @@ func Test_encodeConnectionIDs(t *testing.T) {
 		tt := tests[x]
 		t.Run(fmt.Sprintf("%d_ids", tt.size), func(t *testing.T) {
 			t.Parallel()
-			ids := generateIDs(tt.size)
-			encoded := encodeConnectionIDs(ids)
-			decoded, err := decodeConnectionIDs(encoded)
+			ids, top := generateIDs(tt.size)
+			encoded := encodeConnectionIDs(top, ids)
+			decoded, decodedTop, err := decodeConnectionIDs(encoded)
 			if err != nil {
 				t.Error(err)
 			}
+			if got, want := decodedTop, top; !reflect.DeepEqual(got, want) {
+				t.Errorf("encoding and decoding differs from original data, got: %v, want: %v", got, want)
+			}
+
 			if got, want := decoded, ids; !reflect.DeepEqual(got, want) {
 				t.Errorf("encoding and decoding differs from original data, got: %v, want: %v", got, want)
 			}
@@ -93,7 +97,7 @@ func TestSession_sendSyncConnections(t *testing.T) {
 	session := newSession(rand.Int63(), "sync-test", newWSConn(conn))
 
 	for _, n := range []int{0, 5, 20} {
-		ids := generateIDs(n)
+		ids, _ := generateIDs(n)
 		for _, id := range ids {
 			session.conns[id] = nil
 		}
@@ -114,20 +118,28 @@ func TestSession_sendSyncConnections(t *testing.T) {
 		if got, want := message.messageType, SyncConnections; got != want {
 			t.Errorf("incorrect message type, got: %v, want: %v", got, want)
 		}
-		if decoded, err := decodeConnectionIDs(payload); err != nil {
+
+		decoded, decodedTop, err := decodeConnectionIDs(payload)
+		if err != nil {
 			t.Fatal(err)
-		} else if got, want := decoded, session.activeConnectionIDs(); !reflect.DeepEqual(got, want) {
+			return
+		}
+		returnedIDs, returnedTop := session.activeConnectionIDs()
+		if got, want := decodedTop, returnedTop; !reflect.DeepEqual(got, want) {
+			t.Errorf("incorrect connections IDs, got: %v, want: %v", got, want)
+		}
+		if got, want := decoded, returnedIDs; !reflect.DeepEqual(got, want) {
 			t.Errorf("incorrect connections IDs, got: %v, want: %v", got, want)
 		}
 	}
 }
 
-func generateIDs(n int) []int64 {
+func generateIDs(n int) ([]int64, int64) {
 	ids := make([]int64, n)
 	for x := range ids {
 		ids[x] = rand.Int63()
 	}
-	return ids
+	return ids, rand.Int63()
 }
 
 func testServerWS(t *testing.T, data chan<- []byte) *websocket.Conn {
