@@ -11,7 +11,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/gorilla/mux"
 	"github.com/rancher/remotedialer"
 	"github.com/sirupsen/logrus"
 )
@@ -33,9 +32,8 @@ func Client(server *remotedialer.Server, rw http.ResponseWriter, req *http.Reque
 		timeout = "15"
 	}
 
-	vars := mux.Vars(req)
-	clientKey := vars["id"]
-	url := fmt.Sprintf("%s://%s%s", vars["scheme"], vars["host"], vars["path"])
+	clientKey := req.PathValue("id")
+	url := fmt.Sprintf("%s://%s/%s", req.PathValue("scheme"), req.PathValue("host"), req.PathValue("path"))
 	client := getClient(server, clientKey, timeout)
 
 	id := atomic.AddInt64(&counter, 1)
@@ -123,11 +121,11 @@ func main() {
 		handler.AddPeer(parts[2], parts[0], parts[1])
 	}
 
-	router := mux.NewRouter()
+	router := http.NewServeMux()
 	router.Handle("/connect", handler)
-	router.HandleFunc("/client/{id}/{scheme}/{host}{path:.*}", func(rw http.ResponseWriter, req *http.Request) {
-		Client(handler, rw, req)
-	})
+	clientHandler := func(rw http.ResponseWriter, req *http.Request) { Client(handler, rw, req) }
+	router.HandleFunc("/client/{id}/{scheme}/{host}", clientHandler)
+	router.HandleFunc("/client/{id}/{scheme}/{host}/{path...}", clientHandler)
 
 	fmt.Println("Listening on ", addr)
 	http.ListenAndServe(addr, router)
