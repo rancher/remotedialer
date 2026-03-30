@@ -6,11 +6,16 @@ import (
 	"fmt"
 	"io"
 	"math/rand"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
 	"sort"
+	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/gorilla/websocket"
 )
@@ -267,4 +272,154 @@ func TestCompareAndCloseStaleConnections(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestSyncConnectionsRace is an integration test that reproduces the race condition
+// described in PR #150. When SyncConnectionsInterval is very small and many concurrent
+// requests are being processed, the sync mechanism can close connections that the client
+// hasn't yet received. The fix adds a 'top' field to sync packets so the server knows
+// not to close connections with IDs the client hasn't seen yet.
+//
+// The test runs two subtests:
+//   - without_fix: disables the 'top' guard via syncIgnoreTop, proving the bug exists
+//     (sync error rate > 10%)
+//   - with_fix: runs with the 'top' guard enabled, proving the fix works
+//     (sync error rate < 10%)
+//
+// Note: With the 'top' field fix, connections the client hasn't seen are protected.
+// However, there is a separate (pre-existing) timing window where the client completes
+// and removes a connection before the server does. In those cases the sync correctly
+// closes the stale server-side connection, but this can briefly interrupt in-flight
+// HTTP responses on the server side. The 'top' field does not address this case.
+func TestSyncConnectionsRace(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode")
+	}
+
+	origInterval := SyncConnectionsInterval
+	origTimeout := SyncConnectionsTimeout
+	origIgnoreTop := syncIgnoreTop
+
+	// Aggressive sync settings to maximize the race window
+	SyncConnectionsInterval = time.Millisecond
+	SyncConnectionsTimeout = time.Second
+
+	t.Cleanup(func() {
+		SyncConnectionsInterval = origInterval
+		SyncConnectionsTimeout = origTimeout
+		syncIgnoreTop = origIgnoreTop
+	})
+
+	const totalRequests = 500
+	const maxErrorPercent = 10
+	threshold := int64(totalRequests * maxErrorPercent / 100) // 50
+
+	t.Run("without_fix", func(t *testing.T) {
+		syncIgnoreTop = true
+		_, syncErrs := runSyncRaceLoad(t, totalRequests)
+
+		// Without the 'top' guard, the error rate should be high (typically >10%),
+		// proving the bug is reproducible.
+		if syncErrs <= threshold {
+			t.Errorf("expected sync error rate >%d%% without fix, but got only %d/%d sync errors",
+				maxErrorPercent, syncErrs, totalRequests)
+		}
+	})
+
+	t.Run("with_fix", func(t *testing.T) {
+		syncIgnoreTop = false
+		_, syncErrs := runSyncRaceLoad(t, totalRequests)
+
+		// With the 'top' guard, the error rate should be significantly lower (<10%).
+		// A small number of errors are expected from the pre-existing race where the
+		// client removes a completed connection before the server does.
+		if syncErrs > threshold {
+			t.Errorf("sync error rate too high with fix: got %d/%d sync errors (max allowed: %d)",
+				syncErrs, totalRequests, threshold)
+		}
+	})
+}
+
+// runSyncRaceLoad sets up a remotedialer tunnel and fires totalRequests concurrent HTTP
+// requests through it, returning the total error count and sync-specific error count.
+// SyncConnectionsInterval and SyncConnectionsTimeout must be set by the caller.
+func runSyncRaceLoad(t *testing.T, totalRequests int) (totalErrors, syncErrors int64) {
+	t.Helper()
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	// Backend HTTP server that returns a response body.
+	responseBody := strings.Repeat("x", 4096)
+	backendAddr, err := newServer(ctx, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/plain")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(responseBody))
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// remotedialer server
+	serverAddr, server, err := newTestServer(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Connect client
+	if err := newTestClient(ctx, "ws://"+serverAddr); err != nil {
+		t.Fatal(err)
+	}
+
+	// HTTP client that routes through the remotedialer tunnel
+	client := &http.Client{
+		Timeout: 10 * time.Second,
+		Transport: &http.Transport{
+			DialContext: func(ctx context.Context, network, address string) (net.Conn, error) {
+				return server.Dialer("client")(ctx, network, address)
+			},
+			DisableKeepAlives: true,
+		},
+	}
+
+	const concurrency = 50
+
+	sem := make(chan struct{}, concurrency)
+	var (
+		wg           sync.WaitGroup
+		errCount     int64
+		syncErrCount int64
+	)
+
+	for i := 0; i < totalRequests; i++ {
+		sem <- struct{}{}
+		wg.Add(1)
+		go func() {
+			defer func() {
+				<-sem
+				wg.Done()
+			}()
+
+			resp, err := client.Get("http://" + backendAddr)
+			if err != nil {
+				atomic.AddInt64(&errCount, 1)
+				if strings.Contains(err.Error(), errCloseSyncConnections.Error()) {
+					atomic.AddInt64(&syncErrCount, 1)
+				}
+				return
+			}
+			_, _ = io.Copy(io.Discard, resp.Body)
+			resp.Body.Close()
+		}()
+	}
+
+	wg.Wait()
+
+	// Stop all goroutines before returning
+	cancel()
+	time.Sleep(200 * time.Millisecond)
+
+	t.Logf("completed %d requests: %d total errors, %d sync errors",
+		totalRequests, errCount, syncErrCount)
+
+	return errCount, syncErrCount
 }
