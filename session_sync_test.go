@@ -175,3 +175,96 @@ func testServerWS(t *testing.T, data chan<- []byte) *websocket.Conn {
 	t.Cleanup(func() { _ = conn.Close() })
 	return conn
 }
+
+// TestCompareAndCloseStaleConnections tests that compareAndCloseStaleConnections
+// correctly handles the 'top' field: connections with IDs greater than top should
+// never be closed (the client hasn't seen them yet), while stale connections with
+// IDs <= top should be closed.
+func TestCompareAndCloseStaleConnections(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name           string
+		serverConns    []int64
+		clientConns    []int64
+		top            int64
+		expectedOpen   []int64
+		expectedClosed []int64
+	}{
+		{
+			name:           "no connections to close when lists match",
+			serverConns:    []int64{1, 2, 3},
+			clientConns:    []int64{1, 2, 3},
+			top:            3,
+			expectedOpen:   []int64{1, 2, 3},
+			expectedClosed: nil,
+		},
+		{
+			name:           "close stale connections at or below top",
+			serverConns:    []int64{1, 2, 3, 4, 5},
+			clientConns:    []int64{1, 3, 5},
+			top:            5,
+			expectedOpen:   []int64{1, 3, 5},
+			expectedClosed: []int64{2, 4},
+		},
+		{
+			name:           "preserve all connections above top",
+			serverConns:    []int64{1, 2, 3, 4, 5},
+			clientConns:    []int64{1, 2, 3},
+			top:            3,
+			expectedOpen:   []int64{1, 2, 3, 4, 5},
+			expectedClosed: nil,
+		},
+		{
+			name:           "mixed: close old stale and preserve new unknown",
+			serverConns:    []int64{1, 2, 3, 4, 5, 10, 20},
+			clientConns:    []int64{1, 3},
+			top:            5,
+			expectedOpen:   []int64{1, 3, 10, 20},
+			expectedClosed: []int64{2, 4, 5},
+		},
+		{
+			name:           "empty client list with low top preserves everything",
+			serverConns:    []int64{5, 10, 15},
+			clientConns:    []int64{},
+			top:            0,
+			expectedOpen:   []int64{5, 10, 15},
+			expectedClosed: nil,
+		},
+		{
+			name:           "empty client list with high top closes all",
+			serverConns:    []int64{1, 2, 3},
+			clientConns:    []int64{},
+			top:            10,
+			expectedOpen:   nil,
+			expectedClosed: []int64{1, 2, 3},
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			s := setupDummySession(t, 0)
+			for _, id := range tt.serverConns {
+				conn := newConnection(id, s, "test", "test")
+				s.addConnection(id, conn)
+			}
+
+			s.compareAndCloseStaleConnections(tt.clientConns, tt.top)
+
+			for _, id := range tt.expectedOpen {
+				if s.getConnection(id) == nil {
+					t.Errorf("connection %d should be open but was closed", id)
+				}
+			}
+
+			for _, id := range tt.expectedClosed {
+				if s.getConnection(id) != nil {
+					t.Errorf("connection %d should be closed but is still open", id)
+				}
+			}
+		})
+	}
+}
