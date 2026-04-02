@@ -23,9 +23,15 @@ jobs:
 
       - name: Install helm
         env:
+          # renovate: datasource=github-release-attachments depName=helm/helm
           HELM_VERSION: "v3.13.3"
+          # renovate: datasource=github-release-attachments depName=helm/helm digestVersion=v3.13.3
+          HELM_SUM: "bbb6e7c6201458b235f335280f35493950dcd856825ddcfd1d3b40ae757d5c7d"
         run: |
-          curl -sL https://get.helm.sh/helm-${HELM_VERSION}-linux-amd64.tar.gz | tar xvzf - -C /usr/local/bin --strip-components=1
+          curl -sL -o /tmp/helm.tar.gz https://get.helm.sh/helm-${HELM_VERSION}-linux-amd64.tar.gz
+          echo "${HELM_SUM}  /tmp/helm.tar.gz" | sha256sum -c -
+          tar xvzf /tmp/helm.tar.gz -C /usr/local/bin --strip-components=1
+          rm -f /tmp/helm.tar.gz
 
       - name: Create helm tarball
         env:
