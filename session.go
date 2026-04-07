@@ -91,15 +91,17 @@ func (s *Session) addConnection(connID int64, conn *connection) {
 
 	s.conns[connID] = conn
 
-	// only increment and only on client
-	if s.clientKey == "client" && s.nextConnID < connID {
-		s.nextConnID = connID
+	// Track the highest connection ID seen by the client, used for sync packet 'top' field.
+	// Only on client sessions - server sessions manage nextConnID via atomic.AddInt64 in serverConnect.
+	if s.client {
+		if old := atomic.LoadInt64(&s.nextConnID); old < connID {
+			atomic.StoreInt64(&s.nextConnID, connID)
+		}
 	}
 
 	if PrintTunnelData {
 		logrus.Debugf("CONNECTIONS %d %d", s.sessionKey, len(s.conns))
 	}
-
 }
 
 // removeConnection safely removes a connection by ID, returning the connection object
@@ -143,7 +145,7 @@ func (s *Session) activeConnectionIDs() ([]int64, int64) {
 		res = append(res, id)
 	}
 	sort.Slice(res, func(i, j int) bool { return res[i] < res[j] })
-	return res, s.nextConnID
+	return res, atomic.LoadInt64(&s.nextConnID)
 }
 
 // addSessionKey registers a new session key for a given client key

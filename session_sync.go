@@ -9,6 +9,10 @@ import (
 
 var errCloseSyncConnections = errors.New("sync from client")
 
+// syncIgnoreTop disables the 'top' field guard in compareAndCloseStaleConnections.
+// Used only in tests to simulate the pre-fix behavior and verify the bug is reproducible.
+var syncIgnoreTop bool
+
 // encodeConnectionIDs serializes a slice of connection IDs and the topmost connection ID seen
 func encodeConnectionIDs(top int64, ids []int64) []byte {
 	payload := make([]byte, 0, 8*(len(ids)+1))
@@ -66,7 +70,7 @@ func (s *Session) compareAndCloseStaleConnections(clientIDs []int64, top int64) 
 
 	for _, id := range toClose {
 		// dont close connection if packet contains id not ever seen by client
-		if id > top {
+		if !syncIgnoreTop && id > top {
 			break // not continue as toClose is sorted
 		}
 
