@@ -2,7 +2,7 @@
   "extends": [
     "github>rancher/renovate-config#release"
   ],
-  "baseBranches": [
+  "baseBranchPatterns": [
     "main",
     "release/v0.3",
     "release/v0.4"
