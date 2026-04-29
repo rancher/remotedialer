@@ -4,7 +4,7 @@ COPY . .
 RUN go mod download
 RUN go build -o /app/tcp-client main.go
 
-FROM registry.suse.com/bci/bci-micro:15.7@sha256:07fce181ac208790fe3986e23ff9f1ded5ec6a25259e12631d835d31c57b7245
+FROM registry.suse.com/bci/bci-micro:16.1@sha256:4174e994d0458cb799591713348d3d96ec20aeabb33f230a14bf53f2767d5854
 COPY --from=builder /app/tcp-client .
 
 RUN ls .
