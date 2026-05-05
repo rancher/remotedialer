@@ -4,10 +4,17 @@
   ],
   "baseBranchPatterns": [
     "main",
-    "release/v0.3",
-    "release/v0.4"
+    "release/v0.5",
+    "release/v0.4",
+    "release/v0.3"
   ],
   "prHourlyLimit": 2,
+  "enabledManagers": [
+    "dockerfile",
+    "github-actions",
+    "custom.regex",
+    "gomod"
+  ],
   "packageRules": [
     {
       "enabled": false,
@@ -16,6 +23,46 @@
         "/sigs.k8s.io/*/",
         "/github.com/prometheus/*/"
       ]
+    },
+    {
+      "description": "Disable major updates on release branches",
+      "matchUpdateTypes": ["major"],
+      "matchBaseBranches": ["/^release\\//"],
+      "enabled": false
+    },
+    {
+      "description": "Do not bump golang.org/x/tools minor/major on release branches - it tracks Go language releases and bumping it forces a go directive minor bump",
+      "matchPackageNames": ["golang.org/x/tools"],
+      "matchUpdateTypes": ["major", "minor"],
+      "matchBaseBranches": ["/^release\\//"],
+      "enabled": false
+    },
+    {
+      "description": "Do not bump the Go minor/major version on release branches",
+      "matchDepNames": ["go"],
+      "matchUpdateTypes": ["major", "minor"],
+      "matchBaseBranches": ["/^release\\//"],
+      "enabled": false
+    },
+    {
+      "description": "Group all GitHub Actions updates into a single PR per branch",
+      "matchManagers": ["github-actions"],
+      "groupName": "GitHub Actions",
+      "separateMajorMinor": false
+    },
+    {
+      "description": "Group golang.org/x/* packages into a single PR per branch",
+      "matchPackageNames": [
+        "/^golang\\.org\\/x\\//"
+      ],
+      "groupName": "golang.org/x packages"
+    },
+    {
+      "description": "Group SUSE BCI base image updates into a single PR per branch",
+      "matchPackageNames": [
+        "/^registry\\.suse\\.com\\/bci\\//"
+      ],
+      "groupName": "BCI base images"
     }
   ]
 }
