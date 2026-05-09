@@ -9,7 +9,7 @@ require (
 	github.com/prometheus/client_golang v1.22.0
 	github.com/rancher/dynamiclistener v0.7.0
 	github.com/rancher/wrangler/v3 v3.2.2
-	github.com/sirupsen/logrus v1.9.3
+	github.com/sirupsen/logrus v1.9.4
 	github.com/stretchr/testify v1.11.1
 	k8s.io/api v0.33.1
 	k8s.io/apimachinery v0.33.1
