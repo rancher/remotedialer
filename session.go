@@ -172,11 +172,14 @@ func (s *Session) startPings(rootCtx context.Context) {
 	ctx, cancel := context.WithCancel(rootCtx)
 	// Written under the session lock: Serve (which calls this) runs on its own
 	// goroutine while Close reads the field via stopPings — see ConnectToProxy,
-	// which composes exactly that pair.
+	// which composes exactly that pair. The Add must sit inside the same
+	// critical section: stopPings pairs its Wait with observing a non-nil
+	// pingCancel, so the Add has to happen-before that observation or the
+	// two race on the WaitGroup.
 	s.Lock()
 	s.pingCancel = cancel
-	s.Unlock()
 	s.pingWait.Add(1)
+	s.Unlock()
 
 	go func() {
 		defer s.pingWait.Done()
