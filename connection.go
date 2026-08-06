@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"net"
+	"sync"
 	"time"
 
 	"github.com/rancher/remotedialer/metrics"
@@ -11,6 +12,7 @@ import (
 )
 
 type connection struct {
+	errMu         sync.Mutex
 	err           error
 	writeDeadline time.Time
 	backPressure  *backPressure
@@ -41,17 +43,27 @@ func (c *connection) tunnelClose(err error) {
 }
 
 func (c *connection) doTunnelClose(err error) {
+	c.errMu.Lock()
 	if c.err != nil {
+		c.errMu.Unlock()
 		return
 	}
 
-	metrics.IncSMTotalRemoveConnectionsForWS(c.session.clientKey, c.addr.Network(), c.addr.String())
-	c.err = err
-	if c.err == nil {
-		c.err = io.ErrClosedPipe
+	if err == nil {
+		err = io.ErrClosedPipe
 	}
+	c.err = err
+	c.errMu.Unlock()
 
-	c.buffer.Close(c.err)
+	metrics.IncSMTotalRemoveConnectionsForWS(c.session.clientKey, c.addr.Network(), c.addr.String())
+	c.buffer.Close(err)
+}
+
+// getErr returns the error the connection was closed with, or nil if it is still open.
+func (c *connection) getErr() error {
+	c.errMu.Lock()
+	defer c.errMu.Unlock()
+	return c.err
 }
 
 func (c *connection) OnData(r io.Reader) error {
@@ -79,7 +91,7 @@ func (c *connection) Read(b []byte) (int, error) {
 }
 
 func (c *connection) Write(b []byte) (int, error) {
-	if c.err != nil {
+	if c.getErr() != nil {
 		return 0, io.ErrClosedPipe
 	}
 	ctx, cancel := context.WithCancel(context.Background())
