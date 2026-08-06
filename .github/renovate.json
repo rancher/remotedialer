@@ -45,6 +45,12 @@
       "enabled": false
     },
     {
+      "description": "Do not update the rancher/renovate-config digest on release branches - only main's renovate.json is ever used, so keeping release branch copies in sync is unnecessary",
+      "matchDepNames": ["rancher/renovate-config"],
+      "matchBaseBranches": ["/^release\\//"],
+      "enabled": false
+    },
+    {
       "description": "Group all GitHub Actions updates into a single PR per branch",
       "matchManagers": ["github-actions"],
       "groupName": "GitHub Actions",
