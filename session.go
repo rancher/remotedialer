@@ -170,8 +170,16 @@ func (s *Session) getSessionKeys(clientKey string) map[int]bool {
 
 func (s *Session) startPings(rootCtx context.Context) {
 	ctx, cancel := context.WithCancel(rootCtx)
+	// Written under the session lock: Serve (which calls this) runs on its own
+	// goroutine while Close reads the field via stopPings — see ConnectToProxy,
+	// which composes exactly that pair. The Add must sit inside the same
+	// critical section: stopPings pairs its Wait with observing a non-nil
+	// pingCancel, so the Add has to happen-before that observation or the
+	// two race on the WaitGroup.
+	s.Lock()
 	s.pingCancel = cancel
 	s.pingWait.Add(1)
+	s.Unlock()
 
 	go func() {
 		defer s.pingWait.Done()
@@ -210,11 +218,19 @@ func (s *Session) sendPing() error {
 }
 
 func (s *Session) stopPings() {
-	if s.pingCancel == nil {
+	// Take the cancel func under the lock, then release before cancelling:
+	// pingWait.Wait() must not run while holding a lock the ping goroutine's
+	// callees (getSessionKeys, sendSyncConnections) also take. Nil-ing the
+	// field makes a second Close a no-op instead of a second cancel.
+	s.Lock()
+	cancel := s.pingCancel
+	s.pingCancel = nil
+	s.Unlock()
+	if cancel == nil {
 		return
 	}
 
-	s.pingCancel()
+	cancel()
 	s.pingWait.Wait()
 }
 

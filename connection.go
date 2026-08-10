@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"net"
+	"sync"
 	"time"
 
 	"github.com/rancher/remotedialer/metrics"
@@ -11,6 +12,11 @@ import (
 )
 
 type connection struct {
+	// errMu guards err. tunnelClose arrives from several goroutines at once —
+	// a pipe copy noticing its peer failed, Session.Close tearing down every
+	// connection, serveMessage on a protocol error — and doTunnelClose's
+	// check-then-set of err was a data race between any two of them.
+	errMu         sync.Mutex
 	err           error
 	writeDeadline time.Time
 	backPressure  *backPressure
@@ -41,17 +47,21 @@ func (c *connection) tunnelClose(err error) {
 }
 
 func (c *connection) doTunnelClose(err error) {
+	// First closer wins; the lock is released before buffer.Close so no lock
+	// is held while calling into the buffer's own synchronization.
+	c.errMu.Lock()
 	if c.err != nil {
+		c.errMu.Unlock()
 		return
 	}
+	if err == nil {
+		err = io.ErrClosedPipe
+	}
+	c.err = err
+	c.errMu.Unlock()
 
 	metrics.IncSMTotalRemoveConnectionsForWS(c.session.clientKey, c.addr.Network(), c.addr.String())
-	c.err = err
-	if c.err == nil {
-		c.err = io.ErrClosedPipe
-	}
-
-	c.buffer.Close(c.err)
+	c.buffer.Close(err)
 }
 
 func (c *connection) OnData(r io.Reader) error {
@@ -79,7 +89,10 @@ func (c *connection) Read(b []byte) (int, error) {
 }
 
 func (c *connection) Write(b []byte) (int, error) {
-	if c.err != nil {
+	c.errMu.Lock()
+	failed := c.err != nil
+	c.errMu.Unlock()
+	if failed {
 		return 0, io.ErrClosedPipe
 	}
 	ctx, cancel := context.WithCancel(context.Background())
