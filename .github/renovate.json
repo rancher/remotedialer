@@ -5,8 +5,7 @@
   "baseBranchPatterns": [
     "main",
     "release/v0.5",
-    "release/v0.4",
-    "release/v0.3"
+    "release/v0.4"
   ],
   "prHourlyLimit": 2,
   "enabledManagers": [
@@ -17,10 +16,22 @@
   ],
   "packageRules": [
     {
+      "matchBaseBranches": ["main"],
+      "extends": ["github>rancher/renovate-config:rancher-main#main"]
+    },
+    {
+      "description": "release/v0.5 is only consumed by rancher release/v2.12",
+      "matchBaseBranches": ["release/v0.5"],
+      "extends": ["github>rancher/renovate-config:rancher-2.12#main"]
+    },
+    {
+      "description": "release/v0.4 is only consumed by rancher release/v2.11 (2.8-2.10 also pinned this line but are EOL)",
+      "matchBaseBranches": ["release/v0.4"],
+      "extends": ["github>rancher/renovate-config:rancher-2.11#main"]
+    },
+    {
       "enabled": false,
       "matchPackageNames": [
-        "/k8s.io/*/",
-        "/sigs.k8s.io/*/",
         "/github.com/prometheus/*/"
       ]
     },
@@ -57,11 +68,13 @@
       "separateMajorMinor": false
     },
     {
-      "description": "Group golang.org/x/* packages into a single PR per branch",
+      "description": "Group Go dev tooling (Go version, golangci-lint) into a single PR per branch",
       "matchPackageNames": [
-        "/^golang\\.org\\/x\\//"
+        "go",
+        "golangci/golangci-lint"
       ],
-      "groupName": "golang.org/x packages"
+      "groupName": "Go dev tools",
+      "separateMajorMinor": false
     },
     {
       "description": "Group SUSE BCI base image updates into a single PR per branch",
