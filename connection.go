@@ -2,8 +2,10 @@ package remotedialer
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net"
+	"sync"
 	"time"
 
 	"github.com/rancher/remotedialer/metrics"
@@ -12,7 +14,9 @@ import (
 
 type connection struct {
 	err           error
+	errMu         sync.Mutex
 	writeDeadline time.Time
+	deadlineMu    sync.Mutex
 	backPressure  *backPressure
 	buffer        *readBuffer
 	addr          addr
@@ -41,17 +45,20 @@ func (c *connection) tunnelClose(err error) {
 }
 
 func (c *connection) doTunnelClose(err error) {
+	c.errMu.Lock()
+	defer c.errMu.Unlock()
+
 	if c.err != nil {
 		return
 	}
 
 	metrics.IncSMTotalRemoveConnectionsForWS(c.session.clientKey, c.addr.Network(), c.addr.String())
-	c.err = err
-	if c.err == nil {
-		c.err = io.ErrClosedPipe
+	if err == nil {
+		err = io.ErrClosedPipe
 	}
 
-	c.buffer.Close(c.err)
+	c.buffer.Close(err)
+	c.err = err
 }
 
 func (c *connection) OnData(r io.Reader) error {
@@ -79,19 +86,20 @@ func (c *connection) Read(b []byte) (int, error) {
 }
 
 func (c *connection) Write(b []byte) (int, error) {
-	if c.err != nil {
-		return 0, io.ErrClosedPipe
+	if err := c.Err(); err != nil {
+		if !errors.Is(err, io.ErrClosedPipe) {
+			err = errors.Join(io.ErrClosedPipe, err)
+		}
+		return 0, err
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	if !c.writeDeadline.IsZero() {
-		ctx, cancel = context.WithDeadline(ctx, c.writeDeadline)
+	writeDeadline := c.GetWriteDeadline()
+	if !writeDeadline.IsZero() {
+		ctx, cancel = context.WithDeadline(ctx, writeDeadline)
 		go func(ctx context.Context) {
-			select {
-			case <-ctx.Done():
-				if ctx.Err() == context.DeadlineExceeded {
-					c.Close()
-				}
-				return
+			<-ctx.Done()
+			if ctx.Err() == context.DeadlineExceeded {
+				c.Close()
 			}
 		}(ctx)
 	}
@@ -99,7 +107,7 @@ func (c *connection) Write(b []byte) (int, error) {
 	c.backPressure.Wait(cancel)
 	msg := newMessage(c.connID, b)
 	metrics.AddSMTotalTransmitBytesOnWS(c.session.clientKey, float64(len(msg.Bytes())))
-	return c.session.writeMessage(c.writeDeadline, msg)
+	return c.session.writeMessage(writeDeadline, msg)
 }
 
 func (c *connection) OnPause() {
@@ -152,8 +160,22 @@ func (c *connection) SetReadDeadline(t time.Time) error {
 }
 
 func (c *connection) SetWriteDeadline(t time.Time) error {
+	c.deadlineMu.Lock()
+	defer c.deadlineMu.Unlock()
 	c.writeDeadline = t
 	return nil
+}
+
+func (c *connection) GetWriteDeadline() time.Time {
+	c.deadlineMu.Lock()
+	defer c.deadlineMu.Unlock()
+	return c.writeDeadline
+}
+
+func (c *connection) Err() error {
+	c.errMu.Lock()
+	defer c.errMu.Unlock()
+	return c.err
 }
 
 type addr struct {

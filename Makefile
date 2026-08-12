@@ -10,6 +10,6 @@ server:
 	go build -o server/server ./server
 
 test:
-	go test -cover ./...
+	go test -cover ./... -race
 
 .PHONY: all client dummy server test
