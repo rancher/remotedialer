@@ -77,6 +77,16 @@ func (sm *sessionManager) listClients() []string {
 	return clients
 }
 
+func (sm *sessionManager) disconnect(clientKey string) {
+	sm.Lock()
+	sessions := append([]*Session(nil), sm.clients[clientKey]...)
+	sm.Unlock()
+
+	for _, session := range sessions {
+		session.conn.Close()
+	}
+}
+
 func (sm *sessionManager) getDialer(clientKey string) (Dialer, error) {
 	sm.Lock()
 	defer sm.Unlock()
