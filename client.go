@@ -15,6 +15,18 @@ import (
 // ConnectAuthorizer custom for authorization
 type ConnectAuthorizer func(proto, address string) bool
 
+// ConnectOpts holds optional settings for a client connection.
+type ConnectOpts struct {
+	// Backoff controls the wait between attempts. Zero means fixed DefaultRetryMin.
+	Backoff Backoff
+}
+
+// dialError marks a failed handshake rather than a dropped tunnel.
+type dialError struct{ error }
+
+// Unwrap keeps errors.Is and errors.As working through the wrapper.
+func (e dialError) Unwrap() error { return e.error }
+
 // ClientConnect connect to WS and wait 5 seconds when error
 func ClientConnect(ctx context.Context, wsURL string, headers http.Header, dialer *websocket.Dialer,
 	auth ConnectAuthorizer, onConnect func(context.Context, *Session) error) error {
@@ -26,6 +38,34 @@ func ClientConnect(ctx context.Context, wsURL string, headers http.Header, diale
 		return err
 	}
 	return nil
+}
+
+// ClientConnectWithOpts reconnects until ctx is cancelled, backing off between attempts.
+func ClientConnectWithOpts(ctx context.Context, wsURL string, headers http.Header, dialer *websocket.Dialer,
+	auth ConnectAuthorizer, onConnect func(context.Context, *Session) error, opts *ConnectOpts) error {
+	var backoff Backoff
+	if opts != nil {
+		backoff = opts.Backoff
+	}
+
+	for attempt := 0; ; attempt++ {
+		err := ConnectToProxy(ctx, wsURL, headers, auth, dialer, onConnect)
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+
+		// A non-dial error means the tunnel was up.
+		var de dialError
+		if !errors.As(err, &de) {
+			attempt = 0
+		}
+
+		d := backoff.delay(attempt)
+		logrus.WithError(err).Errorf("Remotedialer proxy error, reconnecting to %s in %s", wsURL, d)
+		if err := sleep(ctx, d); err != nil {
+			return err
+		}
+	}
 }
 
 // ConnectToProxy connects to the websocket server.
@@ -56,7 +96,7 @@ func ConnectToProxyWithDialer(rootCtx context.Context, proxyURL string, headers 
 				logrus.WithError(err).Errorf("Failed to connect to proxy. Response status: %v - %v. Response body: %s", resp.StatusCode, resp.Status, rb)
 			}
 		}
-		return err
+		return dialError{err}
 	}
 	defer ws.Close()
 
