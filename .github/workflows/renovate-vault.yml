@@ -22,7 +22,7 @@ permissions:
 
 jobs:
   call-workflow:
-    uses: rancher/renovate-config/.github/workflows/renovate-vault.yml@97a4f8da34a047d885fbf2b4443c1909af645257 # release
+    uses: rancher/renovate-config/.github/workflows/renovate-vault.yml@0fe8af5feefc8a8f3023f8e311187607daee99ce # release
     with:
       logLevel: ${{ inputs.logLevel || 'info' }}
       overrideSchedule: ${{ github.event.inputs.overrideSchedule == 'true' && '{''schedule'':null}' || '' }}
