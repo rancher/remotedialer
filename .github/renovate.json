@@ -17,17 +17,17 @@
   "packageRules": [
     {
       "matchBaseBranches": ["main"],
-      "extends": ["github>rancher/renovate-config:rancher-main#main"]
+      "extends": ["github>rancher/renovate-config:rancher-main#release"]
     },
     {
       "description": "release/v0.5 is only consumed by rancher release/v2.12",
       "matchBaseBranches": ["release/v0.5"],
-      "extends": ["github>rancher/renovate-config:rancher-2.12#main"]
+      "extends": ["github>rancher/renovate-config:rancher-2.12#release"]
     },
     {
       "description": "release/v0.4 is only consumed by rancher release/v2.11 (2.8-2.10 also pinned this line but are EOL)",
       "matchBaseBranches": ["release/v0.4"],
-      "extends": ["github>rancher/renovate-config:rancher-2.11#main"]
+      "extends": ["github>rancher/renovate-config:rancher-2.11#release"]
     },
     {
       "enabled": false,
