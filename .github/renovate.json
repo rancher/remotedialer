@@ -17,7 +17,7 @@
   "packageRules": [
     {
       "matchBaseBranches": ["main"],
-      "extends": ["github>rancher/renovate-config:rancher-main#main"]
+      "extends": ["github>rancher/renovate-config:rancher-main#release"]
     },
     {
       "description": "release/v0.5 is only consumed by rancher release/v2.12",
