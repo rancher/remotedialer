@@ -90,6 +90,15 @@ func (s *Session) addConnection(connID int64, conn *connection) {
 	defer s.Unlock()
 
 	s.conns[connID] = conn
+
+	// Track the highest connection ID seen by the client, used for sync packet 'top' field.
+	// Only on client sessions - server sessions manage nextConnID via atomic.AddInt64 in serverConnect.
+	if s.client {
+		if old := atomic.LoadInt64(&s.nextConnID); old < connID {
+			atomic.StoreInt64(&s.nextConnID, connID)
+		}
+	}
+
 	if PrintTunnelData {
 		logrus.Debugf("CONNECTIONS %d %d", s.sessionKey, len(s.conns))
 	}
@@ -111,6 +120,7 @@ func (s *Session) removeConnection(connID int64) *connection {
 // The session lock must be held by the caller when calling this method
 func (s *Session) removeConnectionLocked(connID int64) *connection {
 	conn := s.conns[connID]
+
 	delete(s.conns, connID)
 	return conn
 }
@@ -124,7 +134,9 @@ func (s *Session) getConnection(connID int64) *connection {
 }
 
 // activeConnectionIDs returns an ordered list of IDs for the currently active connections
-func (s *Session) activeConnectionIDs() []int64 {
+// it also returns s.nextConnID (a hack to have both the list of conns and nextConnID read in the same lock)
+// TODO: seperate latter functionality
+func (s *Session) activeConnectionIDs() ([]int64, int64) {
 	s.RLock()
 	defer s.RUnlock()
 
@@ -133,7 +145,7 @@ func (s *Session) activeConnectionIDs() []int64 {
 		res = append(res, id)
 	}
 	sort.Slice(res, func(i, j int) bool { return res[i] < res[j] })
-	return res
+	return res, atomic.LoadInt64(&s.nextConnID)
 }
 
 // addSessionKey registers a new session key for a given client key
@@ -190,6 +202,7 @@ func (s *Session) startPings(rootCtx context.Context) {
 				if err := s.sendSyncConnections(); err != nil {
 					logrus.WithError(err).Error("Error syncing connections")
 				}
+
 			case <-t.C:
 				if err := s.sendPing(); err != nil {
 					logrus.WithError(err).Error("Error writing ping")

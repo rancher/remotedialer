@@ -116,7 +116,9 @@ func TestSession_activeConnectionIDs(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			session := Session{conns: tt.conns}
-			if got, want := session.activeConnectionIDs(), tt.expected; !reflect.DeepEqual(got, want) {
+
+			returnedIDs, _ := session.activeConnectionIDs()
+			if got, want := returnedIDs, tt.expected; !reflect.DeepEqual(got, want) {
 				t.Errorf("incorrect result, got: %v, want: %v", got, want)
 			}
 		})
