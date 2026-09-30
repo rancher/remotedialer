@@ -159,8 +159,18 @@ the client can access is running at address 127.0.0.1:8125, make proxied
 requests like this:
 
 ```
-curl http://192.168.0.42:8123/client/foo/http/127.0.0.1:8125/bigfile
+curl http://192.168.0.42:8123/client/foo/http/{https-server}:{port}/bigfile
 ```
+```
+curl http://192.168.0.42:8123/client/foo/https/{https-server}:{port}/{path}
+```
+```
+ws://192.168.0.42:8123/client/foo/wss/{wss-server}:{port}/{path}
+```
+```
+ws://192.168.0.42:8123/client/foo/ws/{ws-server}:{port}/{path}
+```
+If TLS is required at the entry point, use a reverse proxy such as nginx with an SSL certificate.
 
 where `foo` is the hardcoded client ID for this test server.
 

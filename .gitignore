@@ -2,3 +2,6 @@
 /client/client
 /dummy/dummy
 /server/server
+**/.DS_Store
+.codex/
+AGENTS.md
