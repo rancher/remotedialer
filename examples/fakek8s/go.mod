@@ -1,3 +1,3 @@
 module dummy/fakek8s
 
-go 1.27.2
+go 1.27.3

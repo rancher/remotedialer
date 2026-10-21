@@ -1,4 +1,4 @@
-FROM registry.suse.com/bci/golang:1.27@sha256:3ec2874a5d147caa56f24b826f1425d81ac35f62cad2c8424acfaa4dba48397a AS builder
+FROM registry.suse.com/bci/golang:1.27@sha256:107c1d9c1be31452eac6d71afff3fc33144001e515f4f7e843ebbdeedc5cee12 AS builder
 WORKDIR /app
 COPY . .
 RUN go mod download
