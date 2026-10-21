@@ -19,6 +19,9 @@ type ConnectAuthorizer func(proto, address string) bool
 type ConnectOpts struct {
 	// Backoff controls the wait between attempts. Zero means fixed DefaultRetryMin.
 	Backoff Backoff
+
+	// URL, when set, is consulted before every attempt and overrides wsURL.
+	URL func() string
 }
 
 // dialError marks a failed handshake rather than a dropped tunnel.
@@ -44,12 +47,21 @@ func ClientConnect(ctx context.Context, wsURL string, headers http.Header, diale
 func ClientConnectWithOpts(ctx context.Context, wsURL string, headers http.Header, dialer *websocket.Dialer,
 	auth ConnectAuthorizer, onConnect func(context.Context, *Session) error, opts *ConnectOpts) error {
 	var backoff Backoff
+	var urlFor func() string
 	if opts != nil {
 		backoff = opts.Backoff
+		urlFor = opts.URL
 	}
 
 	for attempt := 0; ; attempt++ {
-		err := ConnectToProxy(ctx, wsURL, headers, auth, dialer, onConnect)
+		// Resolve per attempt so a caller whose address changes after the first
+		// connection reconnects to the new one.
+		url := wsURL
+		if urlFor != nil {
+			url = urlFor()
+		}
+
+		err := ConnectToProxy(ctx, url, headers, auth, dialer, onConnect)
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
@@ -61,7 +73,7 @@ func ClientConnectWithOpts(ctx context.Context, wsURL string, headers http.Heade
 		}
 
 		d := backoff.delay(attempt)
-		logrus.WithError(err).Errorf("Remotedialer proxy error, reconnecting to %s in %s", wsURL, d)
+		logrus.WithError(err).Errorf("Remotedialer proxy error, reconnecting to %s in %s", url, d)
 		if err := sleep(ctx, d); err != nil {
 			return err
 		}
