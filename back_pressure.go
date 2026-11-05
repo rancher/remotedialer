@@ -64,6 +64,7 @@ func (b *backPressure) Resume() {
 	}
 	b.c.Resume()
 	b.paused = false
+	b.cond.Broadcast()
 }
 
 func (b *backPressure) Wait(cancel context.CancelFunc) {
