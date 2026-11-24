@@ -6,6 +6,7 @@ import (
 	"math/rand"
 	"net"
 	"sync"
+	"time"
 
 	"github.com/gorilla/websocket"
 
@@ -83,7 +84,7 @@ func (sm *sessionManager) getDialer(clientKey string) (Dialer, error) {
 
 	sessions := sm.clients[clientKey]
 	if len(sessions) > 0 {
-		return toDialer(sessions[0], ""), nil
+		return toDialer(preferResponsiveSession(sessions), ""), nil
 	}
 
 	for _, sessions := range sm.peers {
@@ -96,6 +97,39 @@ func (sm *sessionManager) getDialer(clientKey string) (Dialer, error) {
 	}
 
 	return nil, fmt.Errorf("failed to find Session for client %s", clientKey)
+}
+
+// Keep the usual oldest-session preference while it is receiving heartbeats.
+// If it misses two heartbeat intervals, a responsive replacement can accept
+// new dials while the old WebSocket waits for its read deadline.
+func preferResponsiveSession(sessions []*Session) *Session {
+	oldest := sessions[0]
+	if len(sessions) == 1 {
+		return oldest
+	}
+
+	conn, ok := oldest.conn.(*wsWrapper)
+	if !ok {
+		return oldest
+	}
+	lastSeen := conn.connectedAt
+	if heartbeat := conn.lastHeartbeat.Load(); heartbeat != nil {
+		lastSeen = *heartbeat
+	}
+
+	cutoff := time.Now().Add(-2 * PingWriteInterval)
+	if !lastSeen.Before(cutoff) {
+		return oldest
+	}
+
+	for _, session := range sessions[1:] {
+		if alternative, ok := session.conn.(*wsWrapper); ok {
+			if heartbeat := alternative.lastHeartbeat.Load(); heartbeat != nil && !heartbeat.Before(cutoff) {
+				return session
+			}
+		}
+	}
+	return oldest
 }
 
 func (sm *sessionManager) add(clientKey string, conn *websocket.Conn, peer bool) *Session {
