@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -14,12 +15,15 @@ type wsWrapper struct {
 	// Mutex is used to protect from concurrent usage of the websocket connection
 	sync.Mutex
 	// conn is the underlying websocket connection
-	conn *websocket.Conn
+	conn          *websocket.Conn
+	connectedAt   time.Time
+	lastHeartbeat atomic.Pointer[time.Time]
 }
 
 func newWSConn(conn *websocket.Conn) *wsWrapper {
 	w := &wsWrapper{
-		conn: conn,
+		conn:        conn,
+		connectedAt: time.Now(),
 	}
 	w.setupDeadline()
 	return w
@@ -77,7 +81,7 @@ func (w *wsWrapper) Close() error {
 }
 
 func (w *wsWrapper) setupDeadline() {
-	w.conn.SetReadDeadline(time.Now().Add(PingWaitDuration))
+	w.conn.SetReadDeadline(w.connectedAt.Add(PingWaitDuration))
 	w.conn.SetPingHandler(func(string) error {
 		w.Lock()
 		err := w.conn.WriteControl(websocket.PongMessage, []byte(""), time.Now().Add(PingWaitDuration))
@@ -85,16 +89,26 @@ func (w *wsWrapper) setupDeadline() {
 		if err != nil {
 			return err
 		}
-		if err := w.conn.SetReadDeadline(time.Now().Add(PingWaitDuration)); err != nil {
-			return err
-		}
-		return w.conn.SetWriteDeadline(time.Now().Add(PingWaitDuration))
+		return w.recordHeartbeat()
 	})
 	w.conn.SetPongHandler(func(string) error {
-		if err := w.conn.SetReadDeadline(time.Now().Add(PingWaitDuration)); err != nil {
-			return err
-		}
-		return w.conn.SetWriteDeadline(time.Now().Add(PingWaitDuration))
+		return w.recordHeartbeat()
 	})
+}
 
+func (w *wsWrapper) recordHeartbeat() error {
+	now := time.Now()
+	deadline := now.Add(PingWaitDuration)
+	if err := w.conn.SetReadDeadline(deadline); err != nil {
+		return err
+	}
+	// Gorilla treats SetWriteDeadline as a write operation.
+	w.Lock()
+	err := w.conn.SetWriteDeadline(deadline)
+	w.Unlock()
+	if err != nil {
+		return err
+	}
+	w.lastHeartbeat.Store(&now)
+	return nil
 }
