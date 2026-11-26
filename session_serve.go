@@ -95,12 +95,12 @@ func (s *Session) syncConnections(r io.Reader) error {
 	if err != nil {
 		return fmt.Errorf("reading message body: %w", err)
 	}
-	clientActiveConnections, err := decodeConnectionIDs(payload)
+	clientActiveConnections, top, err := decodeConnectionIDs(payload)
 	if err != nil {
 		return fmt.Errorf("decoding sync connections payload: %w", err)
 	}
 
-	s.compareAndCloseStaleConnections(clientActiveConnections)
+	s.compareAndCloseStaleConnections(clientActiveConnections, top)
 	return nil
 }
 
